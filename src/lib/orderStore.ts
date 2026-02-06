@@ -3,6 +3,7 @@ import "server-only";
 import { promises as fs } from "fs";
 import path from "path";
 import { randomUUID } from "crypto";
+import { kv } from "@vercel/kv";
 
 export type OrderItem = {
   name: string;
@@ -31,8 +32,15 @@ export type OrderRecord = {
 };
 
 const ordersPath = path.join(process.cwd(), "src", "data", "orders.json");
+const kvKey = "dormside:orders";
+const useKv = Boolean(process.env.KV_URL);
 
 const readOrdersFile = async (): Promise<OrderRecord[]> => {
+  if (useKv) {
+    const data = await kv.get<OrderRecord[]>(kvKey);
+    return Array.isArray(data) ? data : [];
+  }
+
   try {
     const file = await fs.readFile(ordersPath, "utf-8");
     const data = JSON.parse(file) as { orders?: OrderRecord[] };
@@ -43,6 +51,10 @@ const readOrdersFile = async (): Promise<OrderRecord[]> => {
 };
 
 const writeOrdersFile = async (orders: OrderRecord[]) => {
+  if (useKv) {
+    await kv.set(kvKey, orders);
+    return;
+  }
   const payload = JSON.stringify({ orders }, null, 2);
   await fs.writeFile(ordersPath, payload, "utf-8");
 };
