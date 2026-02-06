@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   PaymentElement,
   useElements,
@@ -24,19 +25,21 @@ export default function CheckoutForm({
 }: CheckoutFormProps) {
   const stripe = useStripe();
   const elements = useElements();
+  const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [hasSucceeded, setHasSucceeded] = useState(false);
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!stripe || !elements) {
+    if (!stripe || !elements || hasSucceeded) {
       return;
     }
 
     setIsSubmitting(true);
     setMessage(null);
 
-    const { error } = await stripe.confirmPayment({
+    const { error, paymentIntent } = await stripe.confirmPayment({
       elements,
       confirmParams: {
         return_url: `${window.location.origin}/checkout/success`,
@@ -52,7 +55,19 @@ export default function CheckoutForm({
     });
 
     if (error) {
+      if (error.code === "payment_intent_unexpected_state") {
+        setHasSucceeded(true);
+        router.push("/checkout/success");
+        return;
+      }
       setMessage(error.message ?? "Payment failed. Please try again.");
+    } else if (
+      paymentIntent?.status === "succeeded" ||
+      paymentIntent?.status === "processing"
+    ) {
+      setHasSucceeded(true);
+      router.push("/checkout/success");
+      return;
     }
 
     setIsSubmitting(false);
@@ -70,7 +85,7 @@ export default function CheckoutForm({
         </div>
       )}
       <button
-        disabled={!stripe || isSubmitting || disabled}
+        disabled={!stripe || isSubmitting || disabled || hasSucceeded}
         className="mt-6 w-full rounded-full bg-zinc-900 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-zinc-900/20 transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-60"
       >
         {isSubmitting ? "Processing..." : "Pay now"}
