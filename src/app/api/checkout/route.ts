@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 
-import { stripe } from "@/lib/stripe";
+import { getStripe } from "@/lib/stripe";
+
+export const runtime = "nodejs";
 
 type CartItem = {
   name: string;
@@ -36,16 +38,23 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid amount" }, { status: 400 });
   }
 
-  const paymentIntent = await stripe.paymentIntents.create({
-    amount: Math.round(amount * 100),
-    currency: "usd",
-    automatic_payment_methods: { enabled: true },
-    metadata: {
-      order_source: "dormside",
-      fulfillment: deliveryOption,
-      tip: tip.toFixed(2),
-    },
-  });
+  try {
+    const stripe = getStripe();
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount: Math.round(amount * 100),
+      currency: "usd",
+      automatic_payment_methods: { enabled: true },
+      metadata: {
+        order_source: "dormside",
+        fulfillment: deliveryOption,
+        tip: tip.toFixed(2),
+      },
+    });
 
-  return NextResponse.json({ clientSecret: paymentIntent.client_secret });
+    return NextResponse.json({ clientSecret: paymentIntent.client_secret });
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Unable to start checkout";
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
 }

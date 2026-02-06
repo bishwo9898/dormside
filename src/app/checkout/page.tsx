@@ -17,9 +17,8 @@ type Fulfillment = "pickup" | "delivery";
 
 type PaymentMethod = "cash" | "card";
 
-const stripePromise = loadStripe(
-  process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY ?? "",
-);
+const publishableKey = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY ?? "";
+const stripePromise = publishableKey ? loadStripe(publishableKey) : null;
 
 const parsePrice = (price: string) =>
   Number(price.replace(/[^0-9.]/g, "")) || 0;
@@ -105,6 +104,15 @@ export default function CheckoutPage() {
 
   useEffect(() => {
     const createIntent = async () => {
+      if (!publishableKey) {
+        setClientSecret(null);
+        setError(
+          "Stripe is not configured. Please add NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY in Vercel and redeploy.",
+        );
+        setIsLoading(false);
+        return;
+      }
+
       if (cartItems.length === 0 || paymentMethod !== "card" || !isFormValid) {
         setIsLoading(false);
         setClientSecret(null);
@@ -124,7 +132,10 @@ export default function CheckoutPage() {
         });
 
         if (!response.ok) {
-          throw new Error("Unable to start checkout");
+          const errorData = (await response.json().catch(() => null)) as {
+            error?: string;
+          } | null;
+          throw new Error(errorData?.error ?? "Unable to start checkout");
         }
 
         const data = (await response.json()) as { clientSecret: string };
@@ -161,8 +172,12 @@ export default function CheckoutPage() {
             localStorage.setItem("dormside_order_id", orderData.order.id);
           }
         }
-      } catch {
-        setError("Unable to start checkout. Please try again.");
+      } catch (err) {
+        const message =
+          err instanceof Error
+            ? err.message
+            : "Unable to start checkout. Please try again.";
+        setError(message);
       } finally {
         setIsLoading(false);
       }

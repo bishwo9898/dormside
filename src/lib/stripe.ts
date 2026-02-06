@@ -2,12 +2,21 @@ import "server-only";
 
 import Stripe from "stripe";
 
-const secretKey = process.env.STRIPE_SECRET_KEY;
+let stripeClient: Stripe | null = null;
 
-if (!secretKey) {
-  throw new Error("Missing STRIPE_SECRET_KEY environment variable");
-}
+export const getStripe = () => {
+  if (stripeClient) {
+    return stripeClient;
+  }
 
-export const stripe = new Stripe(secretKey, {
-  apiVersion: "2026-01-28.clover",
-});
+  const secretKey = process.env.STRIPE_SECRET_KEY;
+  if (!secretKey) {
+    throw new Error("Missing STRIPE_SECRET_KEY environment variable");
+  }
+
+  stripeClient = new Stripe(secretKey, {
+    apiVersion: "2024-06-20",
+  });
+
+  return stripeClient;
+};
