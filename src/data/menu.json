@@ -1,0 +1,19 @@
+{
+  "items": [
+    {
+      "name": "Cheeseburger Sliders",
+      "description": "Creamy cheddar sauce, toasted breadcrumb finish.",
+      "price": "$6.99"
+    },
+    {
+      "name": "Chips",
+      "description": "Crispy buttermilk chicken with house pickles.",
+      "price": "$12.00"
+    },
+    {
+      "name": "Drink",
+      "description": "Warm artisan loaf with whipped herb butter.",
+      "price": "$4.25"
+    }
+  ]
+}

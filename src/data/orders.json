@@ -1,0 +1,27 @@
+{
+  "orders": [
+    {
+      "fulfillment": "pickup",
+      "paymentMethod": "card",
+      "tip": 0,
+      "deliveryFee": 0,
+      "total": 6.99,
+      "items": [
+        {
+          "name": "Cheeseburger Sliders",
+          "price": "$6.99",
+          "quantity": 1
+        }
+      ],
+      "customer": {
+        "name": "Bishwo Biraj Dallakoti",
+        "email": "bishwo.dallakoti@centre.edu",
+        "phone": "2036680536",
+        "address": ""
+      },
+      "status": "paid",
+      "id": "84e71328-4317-4707-b02f-189bc6f41a1a",
+      "createdAt": "2026-02-06T10:07:02.597Z"
+    }
+  ]
+}
