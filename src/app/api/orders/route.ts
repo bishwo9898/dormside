@@ -29,40 +29,65 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const body = (await request.json()) as OrderRequest;
+  try {
+    const body = (await request.json()) as OrderRequest;
 
-  if (!body.customer?.name || !Array.isArray(body.items) || body.items.length === 0) {
-    return NextResponse.json({ error: "Invalid order" }, { status: 400 });
+    if (
+      !body.customer?.name ||
+      !Array.isArray(body.items) ||
+      body.items.length === 0
+    ) {
+      return NextResponse.json({ error: "Invalid order" }, { status: 400 });
+    }
+
+    const record = await createOrder({
+      ...body,
+      status: body.status ?? "pending",
+    });
+
+    return NextResponse.json({ order: record });
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Unable to save order";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
-
-  const record = await createOrder({
-    ...body,
-    status: body.status ?? "pending",
-  });
-
-  return NextResponse.json({ order: record });
 }
 
 export async function PATCH(request: Request) {
-  const body = (await request.json()) as { id?: string; status?: "pending" | "paid" | "cash_pending" };
-  if (!body.id || !body.status) {
-    return NextResponse.json({ error: "Invalid request" }, { status: 400 });
-  }
+  try {
+    const body = (await request.json()) as {
+      id?: string;
+      status?: "pending" | "paid" | "cash_pending";
+    };
+    if (!body.id || !body.status) {
+      return NextResponse.json({ error: "Invalid request" }, { status: 400 });
+    }
 
-  const updated = await updateOrderStatus(body.id, body.status);
-  if (!updated) {
-    return NextResponse.json({ error: "Order not found" }, { status: 404 });
-  }
+    const updated = await updateOrderStatus(body.id, body.status);
+    if (!updated) {
+      return NextResponse.json({ error: "Order not found" }, { status: 404 });
+    }
 
-  return NextResponse.json({ order: updated });
+    return NextResponse.json({ order: updated });
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Unable to update order";
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
 }
 
 export async function DELETE(request: Request) {
-  const body = (await request.json()) as { id?: string };
-  if (!body.id) {
-    return NextResponse.json({ error: "Missing id" }, { status: 400 });
-  }
+  try {
+    const body = (await request.json()) as { id?: string };
+    if (!body.id) {
+      return NextResponse.json({ error: "Missing id" }, { status: 400 });
+    }
 
-  const removed = await deleteOrder(body.id);
-  return NextResponse.json({ removed });
+    const removed = await deleteOrder(body.id);
+    return NextResponse.json({ removed });
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Unable to delete order";
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
 }

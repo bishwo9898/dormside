@@ -164,6 +164,14 @@ export default function CheckoutPage() {
               status: "pending",
             }),
           });
+
+          if (!orderResponse.ok) {
+            const orderError = (await orderResponse
+              .json()
+              .catch(() => null)) as { error?: string } | null;
+            throw new Error(orderError?.error ?? "Unable to save order");
+          }
+
           const orderData = (await orderResponse.json()) as {
             order?: { id?: string };
           };
@@ -235,16 +243,24 @@ export default function CheckoutPage() {
         }),
       });
 
-      if (response.ok) {
+      if (!response.ok) {
+        const orderError = (await response.json().catch(() => null)) as {
+          error?: string;
+        } | null;
         setOrderMessage(
-          fulfillment === "delivery"
-            ? "Order placed! We’ll deliver your food soon."
-            : "Order placed! Please pick up at Pearl Hall and pay with cash.",
+          orderError?.error ?? "Unable to place cash order. Please try again.",
         );
-        localStorage.removeItem("dormside_cart");
-        localStorage.removeItem("dormside_order_id");
-        setCartItems([]);
+        return;
       }
+
+      setOrderMessage(
+        fulfillment === "delivery"
+          ? "Order placed! We’ll deliver your food soon."
+          : "Order placed! Please pick up at Pearl Hall and pay with cash.",
+      );
+      localStorage.removeItem("dormside_cart");
+      localStorage.removeItem("dormside_order_id");
+      setCartItems([]);
     };
 
     createCashOrder();
