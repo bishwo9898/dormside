@@ -40,14 +40,15 @@ export default function CheckoutForm({
       elements,
       confirmParams: {
         return_url: `${window.location.origin}/checkout/success`,
-      },
-      payment_method_data: {
-        billing_details: {
-          name: billingDetails.name,
-          email: billingDetails.email,
-          phone: billingDetails.phone,
+        payment_method_data: {
+          billing_details: {
+            name: billingDetails.name,
+            email: billingDetails.email,
+            phone: billingDetails.phone,
+          },
         },
       },
+      redirect: "if_required",
     });
 
     if (error) {
