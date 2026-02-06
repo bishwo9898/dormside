@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { getMenu, updateMenu } from "@/lib/menuStore";
 
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
 export async function GET() {
   const items = await getMenu();

@@ -2,7 +2,7 @@ import "server-only";
 
 import { promises as fs } from "fs";
 import path from "path";
-import { kv } from "@vercel/kv";
+import { Pool } from "pg";
 
 export type MenuItem = {
   name: string;
@@ -10,9 +10,43 @@ export type MenuItem = {
   price: string;
 };
 
+type MenuRow = {
+  name: string;
+  description: string;
+  price: string;
+};
+
 const menuPath = path.join(process.cwd(), "src", "data", "menu.json");
-const kvKey = "dormside:menu";
-const useKv = Boolean(process.env.KV_URL);
+const databaseUrl = process.env.DATABASE_URL;
+const useDatabase = Boolean(databaseUrl);
+const isVercel = process.env.VERCEL === "1" || process.env.VERCEL === "true";
+
+const globalForPg = globalThis as unknown as { pgPool?: Pool };
+const pool =
+  globalForPg.pgPool ??
+  (databaseUrl
+    ? new Pool({
+        connectionString: databaseUrl,
+      })
+    : null);
+
+if (!globalForPg.pgPool && pool) {
+  globalForPg.pgPool = pool;
+}
+
+const ensureMenuTable = async () => {
+  if (!pool) {
+    return;
+  }
+
+  await pool.query(`
+    create table if not exists menu_items (
+      name text primary key,
+      description text not null,
+      price text not null
+    );
+  `);
+};
 
 const isValidItem = (item: MenuItem) =>
   Boolean(item.name?.trim()) &&
@@ -20,9 +54,16 @@ const isValidItem = (item: MenuItem) =>
   Boolean(item.price?.trim());
 
 export const getMenu = async (): Promise<MenuItem[]> => {
-  if (useKv) {
-    const data = await kv.get<MenuItem[]>(kvKey);
-    return Array.isArray(data) ? data : [];
+  if (useDatabase && pool) {
+    await ensureMenuTable();
+    const result = await pool.query<MenuRow>(
+      "select name, description, price from menu_items order by name",
+    );
+    return result.rows.map((row) => ({
+      name: row.name,
+      description: row.description,
+      price: row.price,
+    }));
   }
 
   try {
@@ -44,9 +85,32 @@ export const updateMenu = async (items: MenuItem[]): Promise<MenuItem[]> => {
     price: item.price.trim(),
   }));
 
-  if (useKv) {
-    await kv.set(kvKey, sanitized);
+  if (useDatabase && pool) {
+    await ensureMenuTable();
+    const client = await pool.connect();
+    try {
+      await client.query("begin");
+      await client.query("delete from menu_items");
+      for (const item of sanitized) {
+        await client.query(
+          "insert into menu_items (name, description, price) values ($1, $2, $3)",
+          [item.name, item.description, item.price],
+        );
+      }
+      await client.query("commit");
+    } catch (error) {
+      await client.query("rollback");
+      throw error;
+    } finally {
+      client.release();
+    }
     return sanitized;
+  }
+
+  if (isVercel) {
+    throw new Error(
+      "Menu storage is not configured. Set DATABASE_URL to a Postgres database.",
+    );
   }
 
   const payload = JSON.stringify({ items: sanitized }, null, 2);

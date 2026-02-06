@@ -211,7 +211,7 @@ export const deleteOrder = async (id: string) => {
   if (useDatabase && pool) {
     await ensureOrdersTable();
     const result = await pool.query(`delete from orders where id = $1`, [id]);
-    return result.rowCount > 0;
+    return (result.rowCount ?? 0) > 0;
   }
 
   const orders = await readOrdersFile();

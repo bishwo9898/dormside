@@ -7,6 +7,8 @@ import {
   updateOrderStatus,
 } from "@/lib/orderStore";
 
+export const runtime = "nodejs";
+
 type OrderRequest = {
   fulfillment: "pickup" | "delivery";
   paymentMethod: "cash" | "card";
