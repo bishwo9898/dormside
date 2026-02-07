@@ -7,6 +7,7 @@ import {
   updateOrderStatus,
 } from "@/lib/orderStore";
 import { getSettings } from "@/lib/settingsStore";
+import { sendOrderEmails } from "@/lib/email";
 
 export const runtime = "nodejs";
 
@@ -56,6 +57,14 @@ export async function POST(request: Request) {
       status: body.status ?? "pending",
     });
 
+    if (record.paymentMethod === "cash") {
+      try {
+        await sendOrderEmails(record);
+      } catch (error) {
+        console.error("Failed to send order emails", error);
+      }
+    }
+
     return NextResponse.json({ order: record });
   } catch (error) {
     const message =
@@ -77,6 +86,14 @@ export async function PATCH(request: Request) {
     const updated = await updateOrderStatus(body.id, body.status);
     if (!updated) {
       return NextResponse.json({ error: "Order not found" }, { status: 404 });
+    }
+
+    if (updated.status === "paid" && updated.paymentMethod === "card") {
+      try {
+        await sendOrderEmails(updated);
+      } catch (error) {
+        console.error("Failed to send order emails", error);
+      }
     }
 
     return NextResponse.json({ order: updated });
