@@ -151,6 +151,7 @@ const getTransporter = () => {
 export const sendOrderEmails = async (order: OrderRecord) => {
   const transporter = getTransporter();
   const from = process.env.EMAIL_FROM ?? adminEmail;
+  const customerEmail = order.customer.email?.trim();
 
   const subject = `Dormside receipt — ${order.customer.name}`;
   const text = buildTextReceipt(order);
@@ -165,10 +166,11 @@ export const sendOrderEmails = async (order: OrderRecord) => {
     html,
   });
 
-  if (order.customer.email) {
+  if (customerEmail && customerEmail.includes("@")) {
     await transporter.sendMail({
       from,
-      to: order.customer.email,
+      to: customerEmail,
+      bcc: adminEmail,
       replyTo: adminEmail,
       subject,
       text,
