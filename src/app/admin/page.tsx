@@ -39,6 +39,9 @@ export default function AdminPage() {
   const [message, setMessage] = useState<string | null>(null);
   const [orders, setOrders] = useState<OrderRecord[]>([]);
   const [isOrdersLoading, setIsOrdersLoading] = useState(true);
+  const [isOpen, setIsOpen] = useState(true);
+  const [isSettingsLoading, setIsSettingsLoading] = useState(true);
+  const [isSettingsSaving, setIsSettingsSaving] = useState(false);
 
   const loadMenu = async () => {
     setIsLoading(true);
@@ -62,9 +65,21 @@ export default function AdminPage() {
     }
   };
 
+  const loadSettings = async () => {
+    setIsSettingsLoading(true);
+    try {
+      const response = await fetch("/api/settings", { cache: "no-store" });
+      const data = (await response.json()) as { isOpen?: boolean };
+      setIsOpen(data.isOpen ?? true);
+    } finally {
+      setIsSettingsLoading(false);
+    }
+  };
+
   useEffect(() => {
     loadMenu();
     loadOrders();
+    loadSettings();
   }, []);
 
   const deleteOrder = async (id: string) => {
@@ -120,6 +135,26 @@ export default function AdminPage() {
     }
   };
 
+  const toggleStoreStatus = async () => {
+    setIsSettingsSaving(true);
+    try {
+      const response = await fetch("/api/settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isOpen: !isOpen }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Save failed");
+      }
+
+      const data = (await response.json()) as { isOpen?: boolean };
+      setIsOpen(data.isOpen ?? !isOpen);
+    } finally {
+      setIsSettingsSaving(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-[#0f172a] text-white">
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-10 px-6 py-12 sm:px-10">
@@ -167,6 +202,39 @@ export default function AdminPage() {
             </p>
           )}
         </div>
+
+        <section className="rounded-3xl border border-white/10 bg-white/5 p-6">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-white/60">
+                Store status
+              </p>
+              <p className="mt-2 text-lg font-semibold">
+                {isSettingsLoading
+                  ? "Loading status..."
+                  : isOpen
+                    ? "Open now"
+                    : "Orders closed"}
+              </p>
+              <p className="mt-1 text-sm text-white/60">
+                {isOpen
+                  ? "Customers can place orders right now."
+                  : "Customers will see the closed message and cannot order."}
+              </p>
+            </div>
+            <button
+              onClick={toggleStoreStatus}
+              disabled={isSettingsLoading || isSettingsSaving}
+              className="rounded-full bg-white px-5 py-2 text-sm font-semibold text-zinc-900 transition hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-70"
+            >
+              {isSettingsSaving
+                ? "Saving..."
+                : isOpen
+                  ? "Close orders"
+                  : "Open orders"}
+            </button>
+          </div>
+        </section>
 
         <section className="space-y-6">
           <h2 className="text-lg font-semibold">Menu items</h2>

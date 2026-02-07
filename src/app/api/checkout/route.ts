@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { getStripe } from "@/lib/stripe";
+import { getSettings } from "@/lib/settingsStore";
 
 export const runtime = "nodejs";
 
@@ -14,6 +15,11 @@ const parsePrice = (price: string) =>
   Number(price.replace(/[^0-9.]/g, "")) || 0;
 
 export async function POST(request: Request) {
+  const settings = await getSettings();
+  if (!settings.isOpen) {
+    return NextResponse.json({ error: "Orders are closed" }, { status: 403 });
+  }
+
   const body = (await request.json()) as {
     items?: CartItem[];
     deliveryOption?: "pickup" | "delivery";

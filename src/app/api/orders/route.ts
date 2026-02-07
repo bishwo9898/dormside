@@ -6,6 +6,7 @@ import {
   listOrders,
   updateOrderStatus,
 } from "@/lib/orderStore";
+import { getSettings } from "@/lib/settingsStore";
 
 export const runtime = "nodejs";
 
@@ -32,6 +33,14 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
+    const settings = await getSettings();
+    if (!settings.isOpen) {
+      return NextResponse.json(
+        { error: "Orders are closed" },
+        { status: 403 },
+      );
+    }
+
     const body = (await request.json()) as OrderRequest;
 
     if (

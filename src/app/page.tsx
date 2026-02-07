@@ -37,6 +37,7 @@ export default function Home() {
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<"cash" | "card">("cash");
+  const [isOpen, setIsOpen] = useState(true);
 
   const loadMenu = useCallback(async () => {
     try {
@@ -55,11 +56,25 @@ export default function Home() {
     }
   }, []);
 
+  const loadStatus = useCallback(async () => {
+    try {
+      const response = await fetch("/api/settings", { cache: "no-store" });
+      const data = (await response.json()) as { isOpen?: boolean };
+      setIsOpen(data.isOpen ?? true);
+    } catch {
+      setIsOpen(true);
+    }
+  }, []);
+
   useEffect(() => {
     loadMenu();
-    const interval = setInterval(loadMenu, 30000);
+    loadStatus();
+    const interval = setInterval(() => {
+      loadMenu();
+      loadStatus();
+    }, 30000);
     return () => clearInterval(interval);
-  }, [loadMenu]);
+  }, [loadMenu, loadStatus]);
 
   useEffect(() => {
     const stored = localStorage.getItem("dormside_cart");
@@ -114,14 +129,14 @@ export default function Home() {
   const cartCount = cartItems.reduce((sum, item) => sum + item.quantity, 0);
 
   const handleCheckout = () => {
-    if (cartItems.length === 0) {
+    if (cartItems.length === 0 || !isOpen) {
       return;
     }
     setIsCheckoutOpen(true);
   };
 
   const handlePlaceOrder = () => {
-    if (cartItems.length === 0) {
+    if (cartItems.length === 0 || !isOpen) {
       return;
     }
     localStorage.setItem("dormside_payment_method", paymentMethod);
@@ -184,8 +199,14 @@ export default function Home() {
                   <p className="text-sm font-semibold text-zinc-500">Today</p>
                   <p className="text-xl font-semibold">Menu highlights</p>
                 </div>
-                <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700">
-                  Open now
+                <span
+                  className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                    isOpen
+                      ? "bg-emerald-100 text-emerald-700"
+                      : "bg-amber-100 text-amber-700"
+                  }`}
+                >
+                  {isOpen ? "Open now" : "Orders closed (will open soon)"}
                 </span>
               </div>
               <div className="mt-6 space-y-4">
@@ -216,9 +237,10 @@ export default function Home() {
                       </div>
                       <button
                         onClick={() => addToCart(item)}
-                        className="mt-4 w-full rounded-xl border border-zinc-200 px-3 py-2 text-sm font-semibold text-zinc-700 transition hover:border-zinc-300 hover:bg-zinc-50"
+                        disabled={!isOpen}
+                        className="mt-4 w-full rounded-xl border border-zinc-200 px-3 py-2 text-sm font-semibold text-zinc-700 transition hover:border-zinc-300 hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-60"
                       >
-                        Add to cart
+                        {isOpen ? "Add to cart" : "Ordering disabled"}
                       </button>
                     </div>
                   ))
@@ -282,12 +304,17 @@ export default function Home() {
                   </div>
                   <button
                     onClick={handleCheckout}
-                    disabled={cartItems.length === 0}
+                    disabled={cartItems.length === 0 || !isOpen}
                     className="rounded-full bg-zinc-900 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-zinc-900/20 transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     Checkout
                   </button>
                 </div>
+                {!isOpen && (
+                  <p className="mt-3 text-xs text-amber-600">
+                    Orders are closed right now. Please check back soon.
+                  </p>
+                )}
                 {isCheckoutOpen && (
                   <div className="mt-6 rounded-2xl border border-zinc-200 bg-white p-4">
                     <div className="flex items-center justify-between">
@@ -342,6 +369,7 @@ export default function Home() {
                       </a>
                       <button
                         onClick={handlePlaceOrder}
+                        disabled={!isOpen}
                         className="rounded-full bg-zinc-900 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-zinc-900/20"
                       >
                         Continue to checkout

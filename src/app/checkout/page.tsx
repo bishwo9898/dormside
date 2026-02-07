@@ -32,6 +32,7 @@ export default function CheckoutPage() {
   const [fulfillment, setFulfillment] = useState<Fulfillment>("pickup");
   const [tipInput, setTipInput] = useState<string>("");
   const [orderMessage, setOrderMessage] = useState<string | null>(null);
+  const [isOpen, setIsOpen] = useState(true);
   const [submitAttempted, setSubmitAttempted] = useState(false);
   const [orderId, setOrderId] = useState<string | null>(null);
   const [touched, setTouched] = useState({
@@ -66,6 +67,22 @@ export default function CheckoutPage() {
     if (stored) {
       setCartItems(JSON.parse(stored) as CartItem[]);
     }
+  }, []);
+
+  useEffect(() => {
+    const loadStatus = async () => {
+      try {
+        const response = await fetch("/api/settings", { cache: "no-store" });
+        const data = (await response.json()) as { isOpen?: boolean };
+        setIsOpen(data.isOpen ?? true);
+      } catch {
+        setIsOpen(true);
+      }
+    };
+
+    loadStatus();
+    const interval = setInterval(loadStatus, 30000);
+    return () => clearInterval(interval);
   }, []);
 
   useEffect(() => {
@@ -113,7 +130,12 @@ export default function CheckoutPage() {
         return;
       }
 
-      if (cartItems.length === 0 || paymentMethod !== "card" || !isFormValid) {
+      if (
+        cartItems.length === 0 ||
+        paymentMethod !== "card" ||
+        !isFormValid ||
+        !isOpen
+      ) {
         setIsLoading(false);
         setClientSecret(null);
         return;
@@ -198,6 +220,7 @@ export default function CheckoutPage() {
     deliveryFee,
     fulfillment,
     isFormValid,
+    isOpen,
     orderId,
     paymentMethod,
     tipAmount,
@@ -217,7 +240,7 @@ export default function CheckoutPage() {
 
   const handlePlaceCashOrder = () => {
     setSubmitAttempted(true);
-    if (!isFormValid) {
+    if (!isFormValid || !isOpen) {
       return;
     }
     const createCashOrder = async () => {
@@ -278,6 +301,12 @@ export default function CheckoutPage() {
             Choose delivery or pickup, add a tip, and pay with cash or card.
           </p>
         </header>
+
+        {!isOpen && (
+          <div className="rounded-3xl border border-amber-200 bg-amber-50 p-6 text-sm text-amber-700">
+            Orders are closed right now. Please check back soon.
+          </div>
+        )}
 
         {cartItems.length === 0 && (
           <div className="rounded-3xl border border-zinc-200 bg-white p-6 text-sm text-zinc-600">
@@ -483,7 +512,7 @@ export default function CheckoutPage() {
                   options={{ clientSecret, appearance: { theme: "stripe" } }}
                 >
                   <CheckoutForm
-                    disabled={!isFormValid}
+                    disabled={!isFormValid || !isOpen}
                     billingDetails={{
                       name: customerInfo.name,
                       email: customerInfo.email,
@@ -504,7 +533,7 @@ export default function CheckoutPage() {
                 </p>
                 <button
                   onClick={handlePlaceCashOrder}
-                  disabled={!isFormValid}
+                  disabled={!isFormValid || !isOpen}
                   className="mt-4 w-full rounded-full bg-zinc-900 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-zinc-900/20 transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   Place cash order
@@ -512,6 +541,11 @@ export default function CheckoutPage() {
                 {!isFormValid && (
                   <p className="mt-3 text-xs text-red-600">
                     Please complete your info before placing the order.
+                  </p>
+                )}
+                {!isOpen && (
+                  <p className="mt-3 text-xs text-amber-600">
+                    Orders are closed right now.
                   </p>
                 )}
               </div>
