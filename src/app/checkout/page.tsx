@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Elements } from "@stripe/react-stripe-js";
 import { loadStripe } from "@stripe/stripe-js";
 
@@ -24,6 +25,7 @@ const parsePrice = (price: string) =>
   Number(price.replace(/[^0-9.]/g, "")) || 0;
 
 export default function CheckoutPage() {
+  const router = useRouter();
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -104,8 +106,7 @@ export default function CheckoutPage() {
   }, [paymentMethod]);
 
   const emailValid =
-    customerInfo.email.trim().toLowerCase().endsWith("@centre.edu") &&
-    customerInfo.email.includes("@");
+    customerInfo.email.trim().length > 3 && customerInfo.email.includes("@");
   const nameValid = customerInfo.name.trim().length > 1;
   const phoneDigits = customerInfo.phone.replace(/\D/g, "");
   const phoneValid = phoneDigits.length >= 7;
@@ -284,6 +285,7 @@ export default function CheckoutPage() {
       localStorage.removeItem("dormside_cart");
       localStorage.removeItem("dormside_order_id");
       setCartItems([]);
+      router.push(`/checkout/success?method=cash&fulfillment=${fulfillment}`);
     };
 
     createCashOrder();
@@ -405,7 +407,7 @@ export default function CheckoutPage() {
                   )}
                 </label>
                 <label className="text-xs font-semibold uppercase tracking-[0.2em] text-zinc-500 sm:col-span-2">
-                  Centre email
+                  Your email (Please do not use centre email)
                   <input
                     value={customerInfo.email}
                     onChange={(event) =>

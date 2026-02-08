@@ -150,21 +150,13 @@ const getTransporter = () => {
 
 export const sendOrderEmails = async (order: OrderRecord) => {
   const transporter = getTransporter();
-  const from = process.env.EMAIL_FROM ?? adminEmail;
+  const fromAddress = process.env.EMAIL_USER ?? adminEmail;
+  const from = process.env.EMAIL_FROM ?? `Dormside Eats <${fromAddress}>`;
   const customerEmail = order.customer.email?.trim();
 
   const subject = `Dormside receipt — ${order.customer.name}`;
   const text = buildTextReceipt(order);
   const html = buildHtmlReceipt(order);
-
-  await transporter.sendMail({
-    from,
-    to: adminEmail,
-    replyTo: order.customer.email,
-    subject: `New order received — ${order.customer.name}`,
-    text,
-    html,
-  });
 
   if (customerEmail && customerEmail.includes("@")) {
     await transporter.sendMail({
@@ -176,5 +168,15 @@ export const sendOrderEmails = async (order: OrderRecord) => {
       text,
       html,
     });
+    return;
   }
+
+  await transporter.sendMail({
+    from,
+    to: adminEmail,
+    replyTo: order.customer.email,
+    subject: `New order received — ${order.customer.name}`,
+    text,
+    html,
+  });
 };

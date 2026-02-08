@@ -3,6 +3,121 @@
     {
       "fulfillment": "pickup",
       "paymentMethod": "cash",
+      "tip": 0,
+      "deliveryFee": 0,
+      "total": 12,
+      "items": [
+        {
+          "name": "Chips",
+          "price": "$12.00",
+          "quantity": 1
+        }
+      ],
+      "customer": {
+        "name": "Bishwo Biraj Dallakoti",
+        "email": "bishwo.dallakoti@centre.edu",
+        "phone": "2036680536",
+        "address": ""
+      },
+      "status": "cash_pending",
+      "id": "389187a6-954d-4089-be6f-43eb4463c005",
+      "createdAt": "2026-02-08T15:13:06.106Z"
+    },
+    {
+      "fulfillment": "pickup",
+      "paymentMethod": "card",
+      "tip": 0,
+      "deliveryFee": 0,
+      "total": 12,
+      "items": [
+        {
+          "name": "Chips",
+          "price": "$12.00",
+          "quantity": 1
+        }
+      ],
+      "customer": {
+        "name": "Bishwo Biraj Dallakoti",
+        "email": "bishwo.dallakoti@centre.edu",
+        "phone": "2036680536",
+        "address": ""
+      },
+      "status": "pending",
+      "id": "002659f5-910e-4bf8-a797-b6b409f00eeb",
+      "createdAt": "2026-02-08T14:52:24.647Z"
+    },
+    {
+      "fulfillment": "pickup",
+      "paymentMethod": "cash",
+      "tip": 0,
+      "deliveryFee": 0,
+      "total": 12,
+      "items": [
+        {
+          "name": "Chips",
+          "price": "$12.00",
+          "quantity": 1
+        }
+      ],
+      "customer": {
+        "name": "Bishwo Dallakoti",
+        "email": "bishwo9898@gmail.com",
+        "phone": "2036680536",
+        "address": ""
+      },
+      "status": "cash_pending",
+      "id": "6c5441d9-9978-4689-b4cc-7235952a618c",
+      "createdAt": "2026-02-08T00:02:41.566Z"
+    },
+    {
+      "fulfillment": "pickup",
+      "paymentMethod": "cash",
+      "tip": 0,
+      "deliveryFee": 0,
+      "total": 4.25,
+      "items": [
+        {
+          "name": "Drink",
+          "price": "$4.25",
+          "quantity": 1
+        }
+      ],
+      "customer": {
+        "name": "Bishwo Dallakoti",
+        "email": "bishwo.dallakoti@centre.edu",
+        "phone": "2036680536",
+        "address": ""
+      },
+      "status": "cash_pending",
+      "id": "1ff4f5d0-3a0f-46d7-b6dc-bb9be6f7efc2",
+      "createdAt": "2026-02-07T23:59:06.161Z"
+    },
+    {
+      "fulfillment": "pickup",
+      "paymentMethod": "cash",
+      "tip": 1,
+      "deliveryFee": 0,
+      "total": 25,
+      "items": [
+        {
+          "name": "Chips",
+          "price": "$12.00",
+          "quantity": 2
+        }
+      ],
+      "customer": {
+        "name": "Bishwo Biraj Dallakoti",
+        "email": "bishwo.dallakoti@centre.edu",
+        "phone": "2036680536",
+        "address": ""
+      },
+      "status": "cash_pending",
+      "id": "cd95fa4b-1ff8-4cd6-9130-f4f3fa22c33c",
+      "createdAt": "2026-02-07T22:57:41.395Z"
+    },
+    {
+      "fulfillment": "pickup",
+      "paymentMethod": "cash",
       "tip": 2,
       "deliveryFee": 0,
       "total": 14,

@@ -1,13 +1,25 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 
 export default function CheckoutSuccessPage() {
+  const searchParams = useSearchParams();
   const [message, setMessage] = useState(
     "Your payment was successful. We’re preparing your order now.",
   );
 
   useEffect(() => {
+    const method = searchParams.get("method");
+    const fulfillment = searchParams.get("fulfillment");
+    if (method === "cash") {
+      setMessage(
+        fulfillment === "delivery"
+          ? "Order placed! We’ll deliver your food soon."
+          : "Order placed! Please pick up at Pearl Hall and pay with cash.",
+      );
+    }
+
     const finalize = async () => {
       const orderId = localStorage.getItem("dormside_order_id");
       if (!orderId) {
@@ -24,7 +36,7 @@ export default function CheckoutSuccessPage() {
     };
 
     finalize();
-  }, []);
+  }, [searchParams]);
 
   return (
     <div className="min-h-screen bg-[#f7f8fb] text-zinc-900">
