@@ -1,18 +1,17 @@
 "use client";
 import { useEffect, useState } from "react";
-import { useSearchParams } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
 export default function CheckoutSuccessPage() {
-  const searchParams = useSearchParams();
   const [message, setMessage] = useState(
     "Your payment was successful. We’re preparing your order now.",
   );
 
   useEffect(() => {
-    const method = searchParams.get("method");
-    const fulfillment = searchParams.get("fulfillment");
+    const params = new URLSearchParams(window.location.search);
+    const method = params.get("method");
+    const fulfillment = params.get("fulfillment");
     if (method === "cash") {
       setMessage(
         fulfillment === "delivery"
@@ -37,7 +36,7 @@ export default function CheckoutSuccessPage() {
     };
 
     finalize();
-  }, [searchParams]);
+  }, []);
 
   return (
     <div className="min-h-screen bg-[#f7f8fb] text-zinc-900">
