@@ -42,6 +42,7 @@ export default function AdminPage() {
   const [isOpen, setIsOpen] = useState(true);
   const [isSettingsLoading, setIsSettingsLoading] = useState(true);
   const [isSettingsSaving, setIsSettingsSaving] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   const loadMenu = async () => {
     setIsLoading(true);
@@ -155,6 +156,12 @@ export default function AdminPage() {
     }
   };
 
+  const handleLogout = async () => {
+    setIsLoggingOut(true);
+    await fetch("/api/admin/logout", { method: "POST" });
+    window.location.href = "/admin/login";
+  };
+
   return (
     <div className="min-h-screen bg-[#0f172a] text-white">
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-10 px-6 py-12 sm:px-10">
@@ -170,6 +177,13 @@ export default function AdminPage() {
             </p>
           </div>
           <div className="flex flex-wrap gap-3">
+            <button
+              onClick={handleLogout}
+              disabled={isLoggingOut}
+              className="rounded-full border border-white/20 bg-white/10 px-5 py-2 text-sm font-semibold text-white transition hover:bg-white/20 disabled:cursor-not-allowed disabled:opacity-70"
+            >
+              {isLoggingOut ? "Signing out..." : "Sign out"}
+            </button>
             <button
               onClick={loadMenu}
               className="rounded-full border border-white/20 bg-white/10 px-5 py-2 text-sm font-semibold text-white transition hover:bg-white/20"
