@@ -38,6 +38,7 @@ export default function CheckoutForm({
 
     setIsSubmitting(true);
     setMessage(null);
+    localStorage.removeItem("dormside_payment_intent");
 
     const { error, paymentIntent } = await stripe.confirmPayment({
       elements,
@@ -55,9 +56,15 @@ export default function CheckoutForm({
     });
 
     if (error) {
+      if (paymentIntent?.id) {
+        localStorage.setItem("dormside_payment_intent", paymentIntent.id);
+      }
       if (error.code === "payment_intent_unexpected_state") {
         setHasSucceeded(true);
-        router.push("/checkout/success");
+        const intentParam = paymentIntent?.id
+          ? `?payment_intent=${encodeURIComponent(paymentIntent.id)}`
+          : "";
+        router.push(`/checkout/success${intentParam}`);
         return;
       }
       setMessage(error.message ?? "Payment failed. Please try again.");
@@ -66,7 +73,13 @@ export default function CheckoutForm({
       paymentIntent?.status === "processing"
     ) {
       setHasSucceeded(true);
-      router.push("/checkout/success");
+      if (paymentIntent?.id) {
+        localStorage.setItem("dormside_payment_intent", paymentIntent.id);
+      }
+      const intentParam = paymentIntent?.id
+        ? `?payment_intent=${encodeURIComponent(paymentIntent.id)}`
+        : "";
+      router.push(`/checkout/success${intentParam}`);
       return;
     }
 

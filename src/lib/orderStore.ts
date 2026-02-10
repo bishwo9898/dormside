@@ -120,6 +120,11 @@ export const listOrders = async (): Promise<OrderRecord[]> => {
   return readOrdersFile();
 };
 
+export const getOrderById = async (id: string): Promise<OrderRecord | null> => {
+  const orders = await readOrdersFile();
+  return orders.find((order) => order.id === id) ?? null;
+};
+
 export const createOrder = async (
   order: Omit<OrderRecord, "id" | "createdAt">
 ): Promise<OrderRecord> => {

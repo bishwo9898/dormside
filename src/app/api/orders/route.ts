@@ -3,11 +3,13 @@ import { NextResponse } from "next/server";
 import {
   createOrder,
   deleteOrder,
+  getOrderById,
   listOrders,
   updateOrderStatus,
 } from "@/lib/orderStore";
 import { getSettings } from "@/lib/settingsStore";
 import { sendOrderEmails } from "@/lib/email";
+import { getStripe } from "@/lib/stripe";
 
 export const runtime = "nodejs";
 
@@ -78,15 +80,44 @@ export async function PATCH(request: Request) {
     const body = (await request.json()) as {
       id?: string;
       status?: "pending" | "paid" | "cash_pending";
+      paymentIntentId?: string;
     };
     if (!body.id || !body.status) {
       return NextResponse.json({ error: "Invalid request" }, { status: 400 });
     }
 
-    const updated = await updateOrderStatus(body.id, body.status);
-    if (!updated) {
+    const existing = await getOrderById(body.id);
+    if (!existing) {
       return NextResponse.json({ error: "Order not found" }, { status: 404 });
     }
+
+    if (body.status === "paid" && existing.paymentMethod === "card") {
+      if (!body.paymentIntentId) {
+        return NextResponse.json(
+          { error: "Payment verification required" },
+          { status: 400 },
+        );
+      }
+
+      const stripe = getStripe();
+      const intent = await stripe.paymentIntents.retrieve(body.paymentIntentId);
+      const expectedAmount = Math.round(existing.total * 100);
+      if (
+        intent.status !== "succeeded" ||
+        intent.amount !== expectedAmount ||
+        intent.currency !== "usd"
+      ) {
+        return NextResponse.json(
+          {
+            error: "Payment not confirmed",
+            status: intent.status,
+          },
+          { status: 402 },
+        );
+      }
+    }
+
+    const updated = await updateOrderStatus(body.id, body.status);
 
     if (updated.status === "paid" && updated.paymentMethod === "card") {
       try {
