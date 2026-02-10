@@ -40,7 +40,7 @@ export default function CheckoutForm({
     setMessage(null);
     localStorage.removeItem("dormside_payment_intent");
 
-    const { error, paymentIntent } = await stripe.confirmPayment({
+    const result = await stripe.confirmPayment({
       elements,
       confirmParams: {
         return_url: `${window.location.origin}/checkout/success`,
@@ -54,30 +54,31 @@ export default function CheckoutForm({
       },
       redirect: "if_required",
     });
+    const paymentIntentId = result.paymentIntent?.id;
 
-    if (error) {
-      if (paymentIntent?.id) {
-        localStorage.setItem("dormside_payment_intent", paymentIntent.id);
+    if (result.error) {
+      if (paymentIntentId) {
+        localStorage.setItem("dormside_payment_intent", paymentIntentId);
       }
-      if (error.code === "payment_intent_unexpected_state") {
+      if (result.error.code === "payment_intent_unexpected_state") {
         setHasSucceeded(true);
-        const intentParam = paymentIntent?.id
-          ? `?payment_intent=${encodeURIComponent(paymentIntent.id)}`
+        const intentParam = paymentIntentId
+          ? `?payment_intent=${encodeURIComponent(paymentIntentId)}`
           : "";
         router.push(`/checkout/success${intentParam}`);
         return;
       }
-      setMessage(error.message ?? "Payment failed. Please try again.");
+      setMessage(result.error.message ?? "Payment failed. Please try again.");
     } else if (
-      paymentIntent?.status === "succeeded" ||
-      paymentIntent?.status === "processing"
+      result.paymentIntent?.status === "succeeded" ||
+      result.paymentIntent?.status === "processing"
     ) {
       setHasSucceeded(true);
-      if (paymentIntent?.id) {
-        localStorage.setItem("dormside_payment_intent", paymentIntent.id);
+      if (paymentIntentId) {
+        localStorage.setItem("dormside_payment_intent", paymentIntentId);
       }
-      const intentParam = paymentIntent?.id
-        ? `?payment_intent=${encodeURIComponent(paymentIntent.id)}`
+      const intentParam = paymentIntentId
+        ? `?payment_intent=${encodeURIComponent(paymentIntentId)}`
         : "";
       router.push(`/checkout/success${intentParam}`);
       return;
