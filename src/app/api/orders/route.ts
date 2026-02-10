@@ -119,6 +119,10 @@ export async function PATCH(request: Request) {
 
     const updated = await updateOrderStatus(body.id, body.status);
 
+    if (!updated) {
+      return NextResponse.json({ error: "Order not found" }, { status: 404 });
+    }
+
     if (updated.status === "paid" && updated.paymentMethod === "card") {
       try {
         await sendOrderEmails(updated);
