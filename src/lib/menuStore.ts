@@ -4,6 +4,8 @@ import { promises as fs } from "fs";
 import path from "path";
 import { Pool } from "pg";
 
+import menuSeed from "@/data/menu.json";
+
 export type MenuItem = {
   name: string;
   description: string;
@@ -20,6 +22,9 @@ const menuPath = path.join(process.cwd(), "src", "data", "menu.json");
 const databaseUrl = process.env.DATABASE_URL;
 const useDatabase = Boolean(databaseUrl);
 const isVercel = process.env.VERCEL === "1" || process.env.VERCEL === "true";
+const fallbackMenu = Array.isArray(menuSeed.items)
+  ? (menuSeed.items as MenuItem[])
+  : [];
 
 const globalForPg = globalThis as unknown as { pgPool?: Pool };
 const pool =
@@ -70,11 +75,11 @@ export const getMenu = async (): Promise<MenuItem[]> => {
     const file = await fs.readFile(menuPath, "utf-8");
     const data = JSON.parse(file) as { items?: MenuItem[] };
     if (Array.isArray(data.items)) {
-      return data.items;
+      return data.items.length > 0 ? data.items : fallbackMenu;
     }
-    return [];
+    return fallbackMenu;
   } catch {
-    return [];
+    return fallbackMenu;
   }
 };
 
