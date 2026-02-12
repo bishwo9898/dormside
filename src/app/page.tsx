@@ -184,12 +184,12 @@ export default function Home() {
                 secure payments. Designed to feel smooth on any device.
               </p>
               <div className="flex flex-col gap-4 sm:flex-row">
-                <button className="w-full rounded-full bg-zinc-900 px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-zinc-900/20 transition hover:bg-zinc-800 sm:w-auto">
-                  Start ordering
-                </button>
-                <button className="w-full rounded-full border border-zinc-200 bg-white px-6 py-3 text-sm font-semibold text-zinc-900 shadow-sm transition hover:border-zinc-300 hover:bg-zinc-50 sm:w-auto">
+                <a
+                  href="#menu"
+                  className="w-full rounded-full border border-zinc-200 bg-white px-6 py-3 text-center text-sm font-semibold text-zinc-900 shadow-sm transition hover:border-zinc-300 hover:bg-zinc-50 sm:w-auto"
+                >
                   View menu
-                </button>
+                </a>
               </div>
             </div>
 
