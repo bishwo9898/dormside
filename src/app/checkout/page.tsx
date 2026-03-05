@@ -407,7 +407,7 @@ export default function CheckoutPage() {
                   )}
                 </label>
                 <label className="text-xs font-semibold uppercase tracking-[0.2em] text-zinc-500 sm:col-span-2">
-                  Your email (Please do not use centre email)
+                  Your email
                   <input
                     value={customerInfo.email}
                     onChange={(event) =>

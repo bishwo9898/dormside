@@ -102,15 +102,22 @@ export async function PATCH(request: Request) {
       const stripe = getStripe();
       const intent = await stripe.paymentIntents.retrieve(body.paymentIntentId);
       const expectedAmount = Math.round(existing.total * 100);
-      if (
-        intent.status !== "succeeded" ||
-        intent.amount !== expectedAmount ||
-        intent.currency !== "usd"
-      ) {
+      
+      // Only accept succeeded status. Processing should be handled client-side with retries
+      if (intent.status !== "succeeded") {
         return NextResponse.json(
           {
-            error: "Payment not confirmed",
+            error: `Payment status is ${intent.status}. Please try again in a moment.`,
             status: intent.status,
+          },
+          { status: 402 },
+        );
+      }
+      
+      if (intent.amount !== expectedAmount || intent.currency !== "usd") {
+        return NextResponse.json(
+          {
+            error: "Payment amount verification failed",
           },
           { status: 402 },
         );
