@@ -596,9 +596,6 @@ export const buildReceiptPdf = (order: OrderRecord) => {
     wrapText(order.customer.address, 34).forEach((line, index) => {
       addText(commands, line, 340, 516 - index * 14, 10);
     });
-  } else {
-    addText(commands, "Pickup location", 340, 534, 12, "F2");
-    addText(commands, "X", 340, 516, 10);
   }
 
   addLine(commands, 464);
