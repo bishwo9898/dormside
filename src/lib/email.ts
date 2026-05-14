@@ -3,6 +3,7 @@ import "server-only";
 import nodemailer from "nodemailer";
 
 import type { OrderRecord } from "@/lib/orderStore";
+import { buildReceiptPdf, getReceiptFilename } from "@/lib/receipt";
 
 const adminEmail = "dormsideeats@gmail.com";
 
@@ -157,6 +158,13 @@ export const sendOrderEmails = async (order: OrderRecord) => {
   const subject = `Dormside receipt — ${order.customer.name}`;
   const text = buildTextReceipt(order);
   const html = buildHtmlReceipt(order);
+  const attachments = [
+    {
+      filename: getReceiptFilename(order, "pdf"),
+      content: buildReceiptPdf(order),
+      contentType: "application/pdf",
+    },
+  ];
 
   if (customerEmail && customerEmail.includes("@")) {
     await transporter.sendMail({
@@ -167,6 +175,7 @@ export const sendOrderEmails = async (order: OrderRecord) => {
       subject,
       text,
       html,
+      attachments,
     });
     return;
   }
@@ -178,5 +187,6 @@ export const sendOrderEmails = async (order: OrderRecord) => {
     subject: `New order received — ${order.customer.name}`,
     text,
     html,
+    attachments,
   });
 };

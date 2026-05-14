@@ -17,11 +17,13 @@ type BillingDetails = {
 type CheckoutFormProps = {
   disabled: boolean;
   billingDetails: BillingDetails;
+  orderId: string | null;
 };
 
 export default function CheckoutForm({
   disabled,
   billingDetails,
+  orderId,
 }: CheckoutFormProps) {
   const stripe = useStripe();
   const elements = useElements();
@@ -40,10 +42,22 @@ export default function CheckoutForm({
     setMessage(null);
     localStorage.removeItem("dormside_payment_intent");
 
+    const getSuccessPath = (paymentIntentId?: string) => {
+      const params = new URLSearchParams();
+      if (paymentIntentId) {
+        params.set("payment_intent", paymentIntentId);
+      }
+      if (orderId) {
+        params.set("order_id", orderId);
+      }
+      const query = params.toString();
+      return `/checkout/success${query ? `?${query}` : ""}`;
+    };
+
     const result = await stripe.confirmPayment({
       elements,
       confirmParams: {
-        return_url: `${window.location.origin}/checkout/success`,
+        return_url: new URL(getSuccessPath(), window.location.origin).toString(),
         payment_method_data: {
           billing_details: {
             name: billingDetails.name,
@@ -62,10 +76,7 @@ export default function CheckoutForm({
       }
       if (result.error.code === "payment_intent_unexpected_state") {
         setHasSucceeded(true);
-        const intentParam = paymentIntentId
-          ? `?payment_intent=${encodeURIComponent(paymentIntentId)}`
-          : "";
-        router.push(`/checkout/success${intentParam}`);
+        router.push(getSuccessPath(paymentIntentId));
         return;
       }
       setMessage(result.error.message ?? "Payment failed. Please try again.");
@@ -77,10 +88,7 @@ export default function CheckoutForm({
       if (paymentIntentId) {
         localStorage.setItem("dormside_payment_intent", paymentIntentId);
       }
-      const intentParam = paymentIntentId
-        ? `?payment_intent=${encodeURIComponent(paymentIntentId)}`
-        : "";
-      router.push(`/checkout/success${intentParam}`);
+      router.push(getSuccessPath(paymentIntentId));
       return;
     }
 

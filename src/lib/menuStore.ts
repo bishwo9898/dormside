@@ -10,12 +10,14 @@ export type MenuItem = {
   name: string;
   description: string;
   price: string;
+  imageUrl?: string;
 };
 
 type MenuRow = {
   name: string;
   description: string;
   price: string;
+  image_url: string | null;
 };
 
 const menuPath = path.join(process.cwd(), "src", "data", "menu.json");
@@ -48,27 +50,84 @@ const ensureMenuTable = async () => {
     create table if not exists menu_items (
       name text primary key,
       description text not null,
-      price text not null
+      price text not null,
+      image_url text not null default ''
     );
+  `);
+
+  await pool.query(`
+    alter table menu_items
+    add column if not exists image_url text not null default '';
   `);
 };
 
+const normalizeText = (value: unknown) =>
+  typeof value === "string" ? value.trim() : "";
+
+const normalizeImageUrl = (value: unknown) => {
+  const imageUrl = typeof value === "string" ? value.trim() : "";
+
+  if (!imageUrl) {
+    return "";
+  }
+
+  if (imageUrl.startsWith("/") && !imageUrl.startsWith("//")) {
+    return imageUrl;
+  }
+
+  if (/^https?:\/\//i.test(imageUrl)) {
+    return imageUrl;
+  }
+
+  if (/^data:image\/(?:avif|gif|jpe?g|png|webp);base64,/i.test(imageUrl)) {
+    return imageUrl;
+  }
+
+  return "";
+};
+
+const normalizeMenuItem = (item: MenuItem): MenuItem => {
+  const imageUrl = normalizeImageUrl(item.imageUrl);
+  const sanitized: MenuItem = {
+    name: normalizeText(item.name),
+    description: normalizeText(item.description),
+    price: normalizeText(item.price),
+  };
+
+  if (imageUrl) {
+    sanitized.imageUrl = imageUrl;
+  }
+
+  return sanitized;
+};
+
+const mapMenuRow = (row: MenuRow): MenuItem => {
+  const item: MenuItem = {
+    name: row.name,
+    description: row.description,
+    price: row.price,
+  };
+
+  const imageUrl = normalizeImageUrl(row.image_url);
+  if (imageUrl) {
+    item.imageUrl = imageUrl;
+  }
+
+  return item;
+};
+
 const isValidItem = (item: MenuItem) =>
-  Boolean(item.name?.trim()) &&
-  Boolean(item.description?.trim()) &&
-  Boolean(item.price?.trim());
+  Boolean(normalizeText(item.name)) &&
+  Boolean(normalizeText(item.description)) &&
+  Boolean(normalizeText(item.price));
 
 export const getMenu = async (): Promise<MenuItem[]> => {
   if (useDatabase && pool) {
     await ensureMenuTable();
     const result = await pool.query<MenuRow>(
-      "select name, description, price from menu_items order by name",
+      "select name, description, price, image_url from menu_items order by name",
     );
-    return result.rows.map((row) => ({
-      name: row.name,
-      description: row.description,
-      price: row.price,
-    }));
+    return result.rows.map(mapMenuRow);
   }
 
   try {
@@ -84,11 +143,7 @@ export const getMenu = async (): Promise<MenuItem[]> => {
 };
 
 export const updateMenu = async (items: MenuItem[]): Promise<MenuItem[]> => {
-  const sanitized = items.filter(isValidItem).map((item) => ({
-    name: item.name.trim(),
-    description: item.description.trim(),
-    price: item.price.trim(),
-  }));
+  const sanitized = items.filter(isValidItem).map(normalizeMenuItem);
 
   if (useDatabase && pool) {
     await ensureMenuTable();
@@ -98,8 +153,9 @@ export const updateMenu = async (items: MenuItem[]): Promise<MenuItem[]> => {
       await client.query("delete from menu_items");
       for (const item of sanitized) {
         await client.query(
-          "insert into menu_items (name, description, price) values ($1, $2, $3)",
-          [item.name, item.description, item.price],
+          `insert into menu_items (name, description, price, image_url)
+           values ($1, $2, $3, $4)`,
+          [item.name, item.description, item.price, item.imageUrl ?? ""],
         );
       }
       await client.query("commit");

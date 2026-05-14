@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { getMenu, updateMenu } from "@/lib/menuStore";
+import { getMenu, updateMenu, type MenuItem } from "@/lib/menuStore";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -19,6 +19,6 @@ export async function PUT(request: Request) {
     );
   }
 
-  const items = await updateMenu(body.items as Array<{ name: string; description: string; price: string }>);
+  const items = await updateMenu(body.items as MenuItem[]);
   return NextResponse.json({ items });
 }
