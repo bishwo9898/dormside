@@ -415,7 +415,6 @@ export default function CheckoutPage() {
                       : "border-zinc-200 bg-white text-zinc-700 hover:border-zinc-300"
                   }`}
                 >
-                  Pick up at Pearl Hall
                   <span className="mt-1 block text-xs font-normal text-zinc-500">
                     Ready for pickup at the dining counter.
                   </span>

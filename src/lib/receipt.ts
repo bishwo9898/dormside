@@ -65,7 +65,7 @@ const getPaymentLabel = (order: OrderRecord) =>
   order.paymentMethod === "cash" ? "Cash" : "Card";
 
 const getFulfillmentLabel = (order: OrderRecord) =>
-  order.fulfillment === "delivery" ? "Delivery" : "Pickup at Pearl Hall";
+  order.fulfillment === "delivery" ? "Delivery" : "Pickup";
 
 const getStatusLabel = (order: OrderRecord) => {
   if (order.status === "paid") {
@@ -598,7 +598,7 @@ export const buildReceiptPdf = (order: OrderRecord) => {
     });
   } else {
     addText(commands, "Pickup location", 340, 534, 12, "F2");
-    addText(commands, "Pearl Hall", 340, 516, 10);
+    addText(commands, "X", 340, 516, 10);
   }
 
   addLine(commands, 464);

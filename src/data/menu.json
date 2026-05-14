@@ -6,24 +6,24 @@
       "price": "$28"
     },
     {
-      "name": "Buffalo Wings Platter (20 pcs)",
+      "name": "Buffalo Wings Platter",
       "description": "Twenty crispy wings tossed in buffalo sauce.",
-      "price": "$24"
+      "price": "$12"
     },
     {
       "name": "Large Loaded Nacho Tray",
       "description": "Tortilla chips loaded with cheese, toppings, and salsa.",
-      "price": "$22"
+      "price": "$7"
     },
     {
-      "name": "Mac & Cheese Catering Pan",
+      "name": "Mac & Cheese",
       "description": "Creamy macaroni and cheese served family-style.",
       "price": "$30"
     },
     {
       "name": "Caesar Salad Bowl",
       "description": "Crisp romaine, parmesan, croutons, and Caesar dressing.",
-      "price": "$18"
+      "price": "$13"
     },
     {
       "name": "Assorted Soft Drinks Pack",
