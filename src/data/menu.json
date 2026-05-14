@@ -1,19 +1,39 @@
 {
   "items": [
     {
-      "name": "keke",
-      "description": "Creamy cheddar sauce, toasted breadcrumb finish.",
-      "price": "$1000000"
+      "name": "Cheeseburger Sliders Tray (12 pcs)",
+      "description": "A dozen mini cheeseburgers served tray-style for sharing.",
+      "price": "$28"
     },
     {
-      "name": "Chips",
-      "description": "Crispy buttermilk chicken with house pickles.",
-      "price": "$12.00"
+      "name": "Buffalo Wings Platter (20 pcs)",
+      "description": "Twenty crispy wings tossed in buffalo sauce.",
+      "price": "$24"
     },
     {
-      "name": "Drink",
-      "description": "Warm artisan loaf with whipped herb butter.",
-      "price": "$4.25"
+      "name": "Large Loaded Nacho Tray",
+      "description": "Tortilla chips loaded with cheese, toppings, and salsa.",
+      "price": "$22"
+    },
+    {
+      "name": "Mac & Cheese Catering Pan",
+      "description": "Creamy macaroni and cheese served family-style.",
+      "price": "$30"
+    },
+    {
+      "name": "Caesar Salad Bowl",
+      "description": "Crisp romaine, parmesan, croutons, and Caesar dressing.",
+      "price": "$18"
+    },
+    {
+      "name": "Assorted Soft Drinks Pack",
+      "description": "A chilled mix of bottled and canned soft drinks.",
+      "price": "$8"
+    },
+    {
+      "name": "Chocolate Chip Cookie Box",
+      "description": "Fresh-baked chocolate chip cookies packed for sharing.",
+      "price": "$12"
     }
   ]
 }
