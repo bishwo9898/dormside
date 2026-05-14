@@ -1,11 +1,14 @@
 "use client";
 
+/* eslint-disable @next/next/no-img-element */
+
 import { useEffect, useState } from "react";
 
 type MenuItem = {
   name: string;
   description: string;
   price: string;
+  imageUrl?: string;
 };
 
 type OrderRecord = {
@@ -30,7 +33,68 @@ const emptyItem: MenuItem = {
   name: "",
   description: "",
   price: "",
+  imageUrl: "",
 };
+
+const maxPhotoDimension = 1200;
+const photoOutputQuality = 0.84;
+const supportedPhotoTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
+
+const getItemInitials = (name: string) =>
+  name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join("") || "DS";
+
+const resizePhotoFile = (file: File) =>
+  new Promise<string>((resolve, reject) => {
+    if (!supportedPhotoTypes.has(file.type)) {
+      reject(new Error("Please use a JPG, PNG, or WebP image."));
+      return;
+    }
+
+    const reader = new FileReader();
+
+    reader.onerror = () => reject(new Error("Unable to read that image."));
+    reader.onload = () => {
+      const source = reader.result;
+
+      if (typeof source !== "string") {
+        reject(new Error("Unable to prepare that image."));
+        return;
+      }
+
+      const image = new Image();
+
+      image.onerror = () => reject(new Error("Unable to load that image."));
+      image.onload = () => {
+        const longestSide = Math.max(image.naturalWidth, image.naturalHeight);
+        const scale = Math.min(1, maxPhotoDimension / longestSide);
+        const width = Math.max(1, Math.round(image.naturalWidth * scale));
+        const height = Math.max(1, Math.round(image.naturalHeight * scale));
+        const canvas = document.createElement("canvas");
+        const context = canvas.getContext("2d");
+
+        if (!context) {
+          reject(new Error("Unable to process that image."));
+          return;
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        context.fillStyle = "#ffffff";
+        context.fillRect(0, 0, width, height);
+        context.drawImage(image, 0, 0, width, height);
+        resolve(canvas.toDataURL("image/jpeg", photoOutputQuality));
+      };
+
+      image.src = source;
+    };
+
+    reader.readAsDataURL(file);
+  });
 
 export default function AdminPage() {
   const [items, setItems] = useState<MenuItem[]>([]);
@@ -104,6 +168,22 @@ export default function AdminPage() {
     );
   };
 
+  const handlePhotoUpload = async (index: number, file: File) => {
+    setMessage(null);
+
+    try {
+      const imageUrl = await resizePhotoFile(file);
+      handleChange(index, "imageUrl", imageUrl);
+      setMessage("Photo added. Save changes to publish it.");
+    } catch (error) {
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : "Unable to add that photo. Please try another image.",
+      );
+    }
+  };
+
   const addItem = () => {
     setItems((prev) => [...prev, { ...emptyItem }]);
   };
@@ -172,8 +252,8 @@ export default function AdminPage() {
             </p>
             <h1 className="text-3xl font-semibold">Menu management</h1>
             <p className="mt-2 text-sm text-white/70">
-              Update menu items and prices. Changes sync instantly with the
-              customer view.
+              Update menu items, prices, and photos. Changes sync instantly
+              with the customer view.
             </p>
           </div>
           <div className="flex flex-wrap gap-3">
@@ -212,7 +292,7 @@ export default function AdminPage() {
           ) : (
             <p className="text-sm text-white/60">
               Keep names short and clear. Prices should include the currency
-              symbol.
+              symbol. Photos can be uploaded or added with an image URL.
             </p>
           )}
         </div>
@@ -268,8 +348,59 @@ export default function AdminPage() {
                   key={index}
                   className="rounded-3xl border border-white/10 bg-white/5 p-6"
                 >
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex-1 space-y-4">
+                  <div className="grid gap-5 lg:grid-cols-[160px_1fr]">
+                    <div className="space-y-3">
+                      <div className="relative aspect-[4/3] overflow-hidden rounded-2xl border border-white/10 bg-white/10">
+                        {item.imageUrl?.trim() ? (
+                          <img
+                            src={item.imageUrl}
+                            alt={`${item.name || "Menu item"} preview`}
+                            className="h-full w-full object-cover"
+                          />
+                        ) : (
+                          <div className="flex h-full w-full items-center justify-center bg-linear-to-br from-white/20 via-white/10 to-white/5 text-2xl font-semibold text-white/80">
+                            {getItemInitials(item.name)}
+                          </div>
+                        )}
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <label className="cursor-pointer rounded-full border border-white/15 bg-white/10 px-3 py-2 text-center text-xs font-semibold text-white/80 transition hover:bg-white/20">
+                          Upload
+                          <input
+                            type="file"
+                            accept="image/jpeg,image/png,image/webp"
+                            className="sr-only"
+                            onChange={(event) => {
+                              const file = event.currentTarget.files?.[0];
+                              if (file) {
+                                void handlePhotoUpload(index, file);
+                              }
+                              event.currentTarget.value = "";
+                            }}
+                          />
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => handleChange(index, "imageUrl", "")}
+                          disabled={!item.imageUrl?.trim()}
+                          className="rounded-full border border-white/15 bg-white/10 px-3 py-2 text-xs font-semibold text-white/80 transition hover:bg-white/20 disabled:cursor-not-allowed disabled:opacity-40"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    </div>
+                    <div className="space-y-4">
+                      <div className="flex items-start justify-between gap-4">
+                        <p className="text-sm font-semibold text-white">
+                          Item {index + 1}
+                        </p>
+                        <button
+                          onClick={() => removeItem(index)}
+                          className="rounded-full border border-white/10 bg-white/10 px-3 py-2 text-xs font-semibold text-white/70 transition hover:bg-white/20"
+                        >
+                          Remove item
+                        </button>
+                      </div>
                       <label className="block text-xs font-semibold uppercase tracking-[0.2em] text-white/60">
                         Item name
                         <input
@@ -307,13 +438,18 @@ export default function AdminPage() {
                           className="mt-2 w-full rounded-xl border border-white/10 bg-white/10 px-3 py-2 text-sm text-white placeholder:text-white/40 focus:border-white/30 focus:outline-none"
                         />
                       </label>
+                      <label className="block text-xs font-semibold uppercase tracking-[0.2em] text-white/60">
+                        Photo URL
+                        <input
+                          value={item.imageUrl ?? ""}
+                          onChange={(event) =>
+                            handleChange(index, "imageUrl", event.target.value)
+                          }
+                          placeholder="https://example.com/item-photo.jpg"
+                          className="mt-2 w-full rounded-xl border border-white/10 bg-white/10 px-3 py-2 text-sm text-white placeholder:text-white/40 focus:border-white/30 focus:outline-none"
+                        />
+                      </label>
                     </div>
-                    <button
-                      onClick={() => removeItem(index)}
-                      className="rounded-full border border-white/10 bg-white/10 px-3 py-2 text-xs font-semibold text-white/70 transition hover:bg-white/20"
-                    >
-                      Remove
-                    </button>
                   </div>
                 </div>
               ))}

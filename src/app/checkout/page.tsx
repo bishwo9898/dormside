@@ -1,6 +1,9 @@
 "use client";
 
+/* eslint-disable @next/next/no-img-element */
+
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Elements } from "@stripe/react-stripe-js";
 import { loadStripe } from "@stripe/stripe-js";
@@ -11,6 +14,7 @@ type CartItem = {
   name: string;
   description: string;
   price: string;
+  imageUrl?: string;
   quantity: number;
 };
 
@@ -23,6 +27,37 @@ const stripePromise = publishableKey ? loadStripe(publishableKey) : null;
 
 const parsePrice = (price: string) =>
   Number(price.replace(/[^0-9.]/g, "")) || 0;
+
+const getItemInitials = (name: string) =>
+  name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join("") || "DS";
+
+function CartItemPhoto({ item }: { item: CartItem }) {
+  const imageUrl = item.imageUrl?.trim();
+  const [failedImageUrl, setFailedImageUrl] = useState<string | null>(null);
+  const shouldShowImage = Boolean(imageUrl) && failedImageUrl !== imageUrl;
+
+  return (
+    <div className="h-14 w-14 shrink-0 overflow-hidden rounded-2xl bg-[#eef2f7]">
+      {shouldShowImage ? (
+        <img
+          src={imageUrl}
+          alt={item.name}
+          className="h-full w-full object-cover"
+          onError={() => setFailedImageUrl(imageUrl ?? null)}
+        />
+      ) : (
+        <div className="flex h-full w-full items-center justify-center bg-linear-to-br from-[#fee2c7] via-[#e6eefc] to-[#d8f4ef] text-sm font-semibold text-zinc-700">
+          {getItemInitials(item.name)}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function CheckoutPage() {
   const router = useRouter();
@@ -277,6 +312,13 @@ export default function CheckoutPage() {
         return;
       }
 
+      const orderData = (await response.json()) as {
+        order?: { id?: string };
+      };
+      const receiptParam = orderData.order?.id
+        ? `&order_id=${encodeURIComponent(orderData.order.id)}`
+        : "";
+
       setOrderMessage(
         fulfillment === "delivery"
           ? "Order placed! We’ll deliver your food soon."
@@ -285,7 +327,9 @@ export default function CheckoutPage() {
       localStorage.removeItem("dormside_cart");
       localStorage.removeItem("dormside_order_id");
       setCartItems([]);
-      router.push(`/checkout/success?method=cash&fulfillment=${fulfillment}`);
+      router.push(
+        `/checkout/success?method=cash&fulfillment=${fulfillment}${receiptParam}`,
+      );
     };
 
     createCashOrder();
@@ -329,6 +373,29 @@ export default function CheckoutPage() {
               <span>Delivery: ${deliveryFee.toFixed(2)}</span>
               <span>Tip: ${tipAmount.toFixed(2)}</span>
             </div>
+            {cartItems.length > 0 && (
+              <div className="mt-3 divide-y divide-zinc-100 border-t border-zinc-100 pt-3">
+                {cartItems.map((item) => (
+                  <div
+                    key={item.name}
+                    className="flex items-center gap-3 py-3 first:pt-0 last:pb-0"
+                  >
+                    <CartItemPhoto item={item} />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-semibold text-zinc-900">
+                        {item.name}
+                      </p>
+                      <p className="text-xs text-zinc-500">
+                        {item.quantity} x {item.price}
+                      </p>
+                    </div>
+                    <p className="shrink-0 text-sm font-semibold text-zinc-900">
+                      ${(parsePrice(item.price) * item.quantity).toFixed(2)}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 
@@ -515,6 +582,7 @@ export default function CheckoutPage() {
                 >
                   <CheckoutForm
                     disabled={!isFormValid || !isOpen}
+                    orderId={orderId}
                     billingDetails={{
                       name: customerInfo.name,
                       email: customerInfo.email,
@@ -562,18 +630,18 @@ export default function CheckoutPage() {
         )}
 
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <a
+          <Link
             href="/#menu"
             className="text-sm font-semibold text-zinc-600 transition hover:text-zinc-900"
           >
             Add more items
-          </a>
-          <a
+          </Link>
+          <Link
             href="/"
             className="text-sm font-semibold text-zinc-600 transition hover:text-zinc-900"
           >
             Back to home
-          </a>
+          </Link>
         </div>
       </div>
     </div>

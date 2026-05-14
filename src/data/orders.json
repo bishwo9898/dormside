@@ -5,6 +5,77 @@
       "paymentMethod": "cash",
       "tip": 0,
       "deliveryFee": 0,
+      "total": 497,
+      "items": [
+        {
+          "name": "Cheeseburger Sliders Tray (12 pcs)",
+          "price": "$28",
+          "quantity": 3
+        },
+        {
+          "name": "Buffalo Wings Platter",
+          "price": "$12",
+          "quantity": 9
+        },
+        {
+          "name": "Large Loaded Nacho",
+          "price": "$8",
+          "quantity": 7
+        },
+        {
+          "name": "Mac & Cheese",
+          "price": "$12",
+          "quantity": 11
+        },
+        {
+          "name": "Caesar Salad Bowl",
+          "price": "$13",
+          "quantity": 1
+        },
+        {
+          "name": "Assorted Soft Drinks Pack",
+          "price": "$8",
+          "quantity": 13
+        }
+      ],
+      "customer": {
+        "name": "Bishwo Biraz",
+        "email": "bishwo9898@gmail.com",
+        "phone": "9803403962",
+        "address": ""
+      },
+      "status": "cash_pending",
+      "id": "3ca8cce4-19bf-49d4-a6d1-135fd6186391",
+      "createdAt": "2026-05-14T19:59:04.188Z"
+    },
+    {
+      "fulfillment": "pickup",
+      "paymentMethod": "cash",
+      "tip": 0,
+      "deliveryFee": 0,
+      "total": 36,
+      "items": [
+        {
+          "name": "Chips",
+          "price": "$12.00",
+          "quantity": 3
+        }
+      ],
+      "customer": {
+        "name": "Bishwo Biraj Dallakoti",
+        "email": "bishwo9898@gmail.com",
+        "phone": "2036680536",
+        "address": ""
+      },
+      "status": "cash_pending",
+      "id": "6b80cde3-2f84-4798-b560-497ec2302210",
+      "createdAt": "2026-05-11T19:02:45.818Z"
+    },
+    {
+      "fulfillment": "pickup",
+      "paymentMethod": "cash",
+      "tip": 0,
+      "deliveryFee": 0,
       "total": 12,
       "items": [
         {

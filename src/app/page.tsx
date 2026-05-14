@@ -1,22 +1,44 @@
 "use client";
 
+/* eslint-disable @next/next/no-img-element */
+
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 const fallbackMenu = [
   {
-    name: "Mac and Cheese",
-    description: "Creamy cheddar sauce, toasted breadcrumb finish.",
-    price: "$9.50",
+    name: "Cheeseburger Sliders Tray (12 pcs)",
+    description: "A dozen mini cheeseburgers served tray-style for sharing.",
+    price: "$28",
   },
   {
-    name: "Fried Chicken",
-    description: "Crispy buttermilk chicken with house pickles.",
-    price: "$12.00",
+    name: "Buffalo Wings Platter (20 pcs)",
+    description: "Twenty crispy wings tossed in buffalo sauce.",
+    price: "$24",
   },
   {
-    name: "Fresh Bread",
-    description: "Warm artisan loaf with whipped herb butter.",
-    price: "$4.25",
+    name: "Large Loaded Nacho Tray",
+    description: "Tortilla chips loaded with cheese, toppings, and salsa.",
+    price: "$22",
+  },
+  {
+    name: "Mac & Cheese Catering Pan",
+    description: "Creamy macaroni and cheese served family-style.",
+    price: "$30",
+  },
+  {
+    name: "Caesar Salad Bowl",
+    description: "Crisp romaine, parmesan, croutons, and Caesar dressing.",
+    price: "$18",
+  },
+  {
+    name: "Assorted Soft Drinks Pack",
+    description: "A chilled mix of bottled and canned soft drinks.",
+    price: "$8",
+  },
+  {
+    name: "Chocolate Chip Cookie Box",
+    description: "Fresh-baked chocolate chip cookies packed for sharing.",
+    price: "$12",
   },
 ];
 
@@ -24,12 +46,57 @@ type MenuItem = {
   name: string;
   description: string;
   price: string;
+  imageUrl?: string;
 };
 
 type CartItem = MenuItem & { quantity: number };
 
 const parsePrice = (price: string) =>
   Number(price.replace(/[^0-9.]/g, "")) || 0;
+
+const getItemInitials = (name: string) =>
+  name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join("") || "DS";
+
+function MenuItemPhoto({
+  item,
+  className = "",
+  initialsClassName = "text-xl",
+}: {
+  item: MenuItem;
+  className?: string;
+  initialsClassName?: string;
+}) {
+  const imageUrl = item.imageUrl?.trim();
+  const [failedImageUrl, setFailedImageUrl] = useState<string | null>(null);
+  const shouldShowImage = Boolean(imageUrl) && failedImageUrl !== imageUrl;
+
+  return (
+    <div
+      className={`relative overflow-hidden bg-[#eef2f7] ${className}`}
+      aria-label={`${item.name} photo`}
+    >
+      {shouldShowImage ? (
+        <img
+          src={imageUrl}
+          alt={item.name}
+          className="h-full w-full object-cover"
+          onError={() => setFailedImageUrl(imageUrl ?? null)}
+        />
+      ) : (
+        <div className="flex h-full w-full items-center justify-center bg-linear-to-br from-[#fee2c7] via-[#e6eefc] to-[#d8f4ef] text-zinc-700">
+          <span className={`font-semibold ${initialsClassName}`}>
+            {getItemInitials(item.name)}
+          </span>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function Home() {
   const [menuItems, setMenuItems] = useState<MenuItem[]>(fallbackMenu);
@@ -127,6 +194,7 @@ export default function Home() {
   };
 
   const cartCount = cartItems.reduce((sum, item) => sum + item.quantity, 0);
+  const featuredItems = useMemo(() => menuItems.slice(0, 3), [menuItems]);
 
   const handleCheckout = () => {
     if (cartItems.length === 0 || !isOpen) {
@@ -217,31 +285,40 @@ export default function Home() {
                     <div className="mt-5 h-9 w-full animate-pulse rounded-xl bg-zinc-200" />
                   </div>
                 ) : (
-                  menuItems.map((item) => (
+                  featuredItems.map((item) => (
                     <div
                       key={item.name}
-                      className="rounded-2xl border border-zinc-100 bg-white p-4 shadow-sm"
+                      className="rounded-2xl border border-zinc-100 bg-white p-3 shadow-sm"
                     >
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <p className="text-base font-semibold text-zinc-900">
-                            {item.name}
-                          </p>
-                          <p className="text-sm text-zinc-500">
-                            {item.description}
-                          </p>
+                      <div className="flex gap-4">
+                        <MenuItemPhoto
+                          item={item}
+                          className="h-24 w-24 shrink-0 rounded-2xl sm:h-28 sm:w-28"
+                          initialsClassName="text-lg"
+                        />
+                        <div className="flex min-w-0 flex-1 flex-col">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <p className="truncate text-base font-semibold text-zinc-900">
+                                {item.name}
+                              </p>
+                              <p className="mt-1 text-sm leading-5 text-zinc-500">
+                                {item.description}
+                              </p>
+                            </div>
+                            <p className="shrink-0 text-sm font-semibold text-zinc-900">
+                              {item.price}
+                            </p>
+                          </div>
+                          <button
+                            onClick={() => addToCart(item)}
+                            disabled={!isOpen}
+                            className="mt-auto w-full rounded-xl border border-zinc-200 px-3 py-2 text-sm font-semibold text-zinc-700 transition hover:border-zinc-300 hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            {isOpen ? "Add to cart" : "Ordering disabled"}
+                          </button>
                         </div>
-                        <p className="text-sm font-semibold text-zinc-900">
-                          {item.price}
-                        </p>
                       </div>
-                      <button
-                        onClick={() => addToCart(item)}
-                        disabled={!isOpen}
-                        className="mt-4 w-full rounded-xl border border-zinc-200 px-3 py-2 text-sm font-semibold text-zinc-700 transition hover:border-zinc-300 hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-60"
-                      >
-                        {isOpen ? "Add to cart" : "Ordering disabled"}
-                      </button>
                     </div>
                   ))
                 )}
@@ -268,11 +345,20 @@ export default function Home() {
                         key={item.name}
                         className="flex items-center justify-between gap-4 rounded-xl bg-[#f7f8fb] px-3 py-2"
                       >
-                        <div>
-                          <p className="text-sm font-semibold text-zinc-900">
-                            {item.name}
-                          </p>
-                          <p className="text-xs text-zinc-500">{item.price}</p>
+                        <div className="flex min-w-0 items-center gap-3">
+                          <MenuItemPhoto
+                            item={item}
+                            className="h-11 w-11 shrink-0 rounded-xl"
+                            initialsClassName="text-xs"
+                          />
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-semibold text-zinc-900">
+                              {item.name}
+                            </p>
+                            <p className="text-xs text-zinc-500">
+                              {item.price}
+                            </p>
+                          </div>
                         </div>
                         <div className="flex items-center gap-2">
                           <button
@@ -393,40 +479,50 @@ export default function Home() {
               A focused selection, always fresh.
             </h2>
             <p className="max-w-2xl text-base leading-7 text-zinc-600">
-              Browse the essentials, customize your order, and check out in
-              seconds — simple and reliable.
+              Browse the essentials with fresh photos, clear prices, and quick
+              add-to-cart actions.
             </p>
           </div>
-          <div className="grid gap-6 lg:grid-cols-3">
-            {[
-              {
-                title: "Clear item details",
-                description:
-                  "Everything you need at a glance: ingredients, price, and notes.",
-              },
-              {
-                title: "Quick add",
-                description:
-                  "Add items in a tap and keep totals up to date instantly.",
-              },
-              {
-                title: "Smooth checkout",
-                description:
-                  "Secure payments with instant confirmation and receipts.",
-              },
-            ].map((card) => (
-              <div
-                key={card.title}
-                className="rounded-3xl border border-zinc-100 bg-[#f7f8fb] p-6 shadow-sm"
-              >
-                <h3 className="text-lg font-semibold text-zinc-900">
-                  {card.title}
-                </h3>
-                <p className="mt-3 text-sm leading-6 text-zinc-600">
-                  {card.description}
-                </p>
-              </div>
-            ))}
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+            {isLoading
+              ? [0, 1, 2].map((key) => (
+                  <div
+                    key={key}
+                    className="h-80 animate-pulse rounded-3xl bg-[#f7f8fb]"
+                  />
+                ))
+              : menuItems.map((item) => (
+                  <article
+                    key={item.name}
+                    className="rounded-3xl border border-zinc-100 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg"
+                  >
+                    <div className="relative">
+                      <MenuItemPhoto
+                        item={item}
+                        className="aspect-[4/3] w-full rounded-2xl"
+                        initialsClassName="text-3xl"
+                      />
+                      <span className="absolute right-3 top-3 rounded-full bg-white/95 px-3 py-1 text-sm font-semibold text-zinc-900 shadow-sm">
+                        {item.price}
+                      </span>
+                    </div>
+                    <div className="mt-5 flex min-h-[10.5rem] flex-col">
+                      <h3 className="text-lg font-semibold text-zinc-900">
+                        {item.name}
+                      </h3>
+                      <p className="mt-2 flex-1 text-sm leading-6 text-zinc-600">
+                        {item.description}
+                      </p>
+                      <button
+                        onClick={() => addToCart(item)}
+                        disabled={!isOpen}
+                        className="mt-5 w-full rounded-full bg-zinc-900 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-zinc-900/15 transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {isOpen ? "Add to cart" : "Ordering disabled"}
+                      </button>
+                    </div>
+                  </article>
+                ))}
           </div>
         </div>
       </section>

@@ -1,5 +1,7 @@
 "use client";
+
 import { useEffect, useState } from "react";
+import Link from "next/link";
 
 export const dynamic = "force-dynamic";
 
@@ -8,6 +10,7 @@ const MAX_RETRIES = 8;
 export default function CheckoutSuccessPage() {
   const [message, setMessage] = useState("Checking payment status...");
   const [status, setStatus] = useState<"success" | "error" | "info">("info");
+  const [receiptOrderId, setReceiptOrderId] = useState<string | null>(null);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -15,8 +18,12 @@ export default function CheckoutSuccessPage() {
     const fulfillment = params.get("fulfillment");
     const redirectStatus = params.get("redirect_status");
     const paymentIntentParam = params.get("payment_intent");
+    const orderParam = params.get("order_id");
 
     if (method === "cash") {
+      if (orderParam) {
+        setReceiptOrderId(orderParam);
+      }
       setStatus("success");
       setMessage(
         fulfillment === "delivery"
@@ -37,7 +44,7 @@ export default function CheckoutSuccessPage() {
     let retryCount = 0;
 
     const finalize = async (): Promise<void> => {
-      const orderId = localStorage.getItem("dormside_order_id");
+      const orderId = orderParam || localStorage.getItem("dormside_order_id");
       const storedIntent = localStorage.getItem("dormside_payment_intent");
       const paymentIntentId = paymentIntentParam || storedIntent;
 
@@ -128,6 +135,10 @@ export default function CheckoutSuccessPage() {
           return;
         }
 
+        const orderData = (await response.json()) as {
+          order?: { id?: string };
+        };
+        setReceiptOrderId(orderData.order?.id ?? orderId);
         localStorage.removeItem("dormside_cart");
         localStorage.removeItem("dormside_order_id");
         localStorage.removeItem("dormside_payment_intent");
@@ -182,12 +193,46 @@ export default function CheckoutSuccessPage() {
           </h1>
           <p className="mt-3 text-sm">{message}</p>
         </div>
-        <a
+
+        {status === "success" && receiptOrderId && (
+          <div className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-zinc-500">
+              Receipt
+            </p>
+            <h2 className="mt-2 text-2xl font-semibold text-zinc-900">
+              Your receipt is ready
+            </h2>
+            <p className="mt-2 text-sm text-zinc-600">
+              Download a professional PDF receipt with your order details,
+              pricing, payment status, and fulfillment information.
+            </p>
+            <div className="mt-5 flex flex-col gap-3 sm:flex-row">
+              <a
+                href={`/api/orders/${encodeURIComponent(receiptOrderId)}/receipt`}
+                download
+                className="rounded-full bg-zinc-900 px-5 py-3 text-center text-sm font-semibold text-white shadow-lg shadow-zinc-900/15 transition hover:bg-zinc-800"
+              >
+                Download PDF receipt
+              </a>
+              <a
+                href={`/api/orders/${encodeURIComponent(
+                  receiptOrderId,
+                )}/receipt?format=html`}
+                target="_blank"
+                rel="noreferrer"
+                className="rounded-full border border-zinc-200 bg-white px-5 py-3 text-center text-sm font-semibold text-zinc-700 transition hover:border-zinc-300 hover:bg-zinc-50"
+              >
+                Open printable copy
+              </a>
+            </div>
+          </div>
+        )}
+        <Link
           href="/"
           className="text-sm font-semibold text-zinc-600 transition hover:text-zinc-900"
         >
           Back to home
-        </a>
+        </Link>
       </div>
     </div>
   );
