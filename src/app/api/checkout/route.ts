@@ -1,61 +1,57 @@
 import { NextResponse } from "next/server";
 
-import { getStripe } from "@/lib/stripe";
+import { getOrderById, setOrderPaymentIntent } from "@/lib/orderStore";
 import { getSettings } from "@/lib/settingsStore";
+import { getStripe } from "@/lib/stripe";
 
 export const runtime = "nodejs";
 
-type CartItem = {
-  name: string;
-  price: string;
-  quantity: number;
-};
-
-const parsePrice = (price: string) =>
-  Number(price.replace(/[^0-9.]/g, "")) || 0;
-
 export async function POST(request: Request) {
-  const settings = await getSettings();
-  if (!settings.isOpen) {
-    return NextResponse.json({ error: "Orders are closed" }, { status: 403 });
-  }
-
-  const body = (await request.json()) as {
-    items?: CartItem[];
-    deliveryOption?: "pickup" | "delivery";
-    tip?: number;
-  };
-
-  if (!Array.isArray(body.items) || body.items.length === 0) {
-    return NextResponse.json({ error: "Cart is empty" }, { status: 400 });
-  }
-
-  const deliveryOption =
-    body.deliveryOption === "delivery" ? "delivery" : "pickup";
-  const deliveryFee = deliveryOption === "delivery" ? 3 : 0;
-  const tip = Math.max(0, Number(body.tip ?? 0));
-
-  const amount = body.items.reduce((sum, item) => {
-    const lineTotal = parsePrice(item.price) * item.quantity;
-    return sum + lineTotal;
-  }, 0) + deliveryFee + tip;
-
-  if (amount <= 0) {
-    return NextResponse.json({ error: "Invalid amount" }, { status: 400 });
-  }
-
   try {
+    const settings = await getSettings();
+    if (!settings.isOpen) {
+      return NextResponse.json({ error: "Orders are closed" }, { status: 403 });
+    }
+
+    const body = (await request.json()) as { orderId?: string };
+    if (!body.orderId) {
+      return NextResponse.json({ error: "Order ID is required" }, { status: 400 });
+    }
+
+    const order = await getOrderById(body.orderId);
+    if (!order || order.paymentMethod !== "card" || order.status !== "pending") {
+      return NextResponse.json({ error: "This online order can no longer be paid." }, { status: 409 });
+    }
+
     const stripe = getStripe();
-    const paymentIntent = await stripe.paymentIntents.create({
-      amount: Math.round(amount * 100),
-      currency: "usd",
-      automatic_payment_methods: { enabled: true },
-      metadata: {
-        order_source: "dormside",
-        fulfillment: deliveryOption,
-        tip: tip.toFixed(2),
+    const expectedAmount = Math.round(order.total * 100);
+    if (order.paymentIntentId) {
+      const existingIntent = await stripe.paymentIntents.retrieve(order.paymentIntentId);
+      if (
+        existingIntent.metadata.order_id === order.id &&
+        existingIntent.amount === expectedAmount &&
+        existingIntent.currency === "usd" &&
+        !["canceled", "succeeded"].includes(existingIntent.status)
+      ) {
+        return NextResponse.json({ clientSecret: existingIntent.client_secret });
+      }
+    }
+
+    const paymentIntent = await stripe.paymentIntents.create(
+      {
+        amount: expectedAmount,
+        currency: "usd",
+        automatic_payment_methods: { enabled: true },
+        receipt_email: order.customer.email,
+        metadata: {
+          order_id: order.id,
+          order_source: "dormside",
+          fulfillment: order.fulfillment,
+        },
       },
-    });
+      { idempotencyKey: `dormside-order-${order.id}` },
+    );
+    await setOrderPaymentIntent(order.id, paymentIntent.id);
 
     return NextResponse.json({ clientSecret: paymentIntent.client_secret });
   } catch (error) {

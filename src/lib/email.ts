@@ -12,6 +12,14 @@ const parsePrice = (price: string) =>
 
 const formatMoney = (value: number) => `$${value.toFixed(2)}`;
 
+const escapeHtml = (value: string) =>
+  value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+
 const formatItemLine = (name: string, quantity: number, price: string) => {
   const unit = parsePrice(price);
   const lineTotal = unit * quantity;
@@ -54,8 +62,8 @@ const buildHtmlReceipt = (order: OrderRecord) => {
       const lineTotal = unit * item.quantity;
       return `
         <tr>
-          <td style="padding:8px 0;">${item.quantity}× ${item.name}</td>
-          <td style="padding:8px 0; text-align:right;">${item.price}</td>
+          <td style="padding:8px 0;">${item.quantity}× ${escapeHtml(item.name)}</td>
+          <td style="padding:8px 0; text-align:right;">${escapeHtml(item.price)}</td>
           <td style="padding:8px 0; text-align:right;">${formatMoney(
             lineTotal,
           )}</td>
@@ -74,12 +82,12 @@ const buildHtmlReceipt = (order: OrderRecord) => {
 
       <h3 style="margin:16px 0 8px;">Customer</h3>
       <p style="margin:0 0 16px; color:#475569;">
-        ${order.customer.name}<br/>
-        ${order.customer.email}<br/>
-        ${order.customer.phone}<br/>
+        ${escapeHtml(order.customer.name)}<br/>
+        ${escapeHtml(order.customer.email)}<br/>
+        ${escapeHtml(order.customer.phone)}<br/>
         ${
           order.fulfillment === "delivery"
-            ? order.customer.address
+            ? escapeHtml(order.customer.address)
             : "Pickup"
         }
       </p>
@@ -138,13 +146,19 @@ const getTransporter = () => {
     );
   }
 
+  // Google displays app passwords in groups of four characters, but SMTP expects
+  // the uninterrupted value. Other providers retain passwords exactly as entered.
+  const smtpPass = /(^|\.)gmail\.com$/i.test(host)
+    ? pass.replace(/\s+/g, "")
+    : pass;
+
   return nodemailer.createTransport({
     host,
     port,
     secure: port === 465,
     auth: {
       user,
-      pass,
+      pass: smtpPass,
     },
   });
 };
@@ -166,8 +180,10 @@ export const sendOrderEmails = async (order: OrderRecord) => {
     },
   ];
 
+  await transporter.verify();
+
   if (customerEmail && customerEmail.includes("@")) {
-    await transporter.sendMail({
+    const result = await transporter.sendMail({
       from,
       to: customerEmail,
       bcc: adminEmail,
@@ -177,10 +193,13 @@ export const sendOrderEmails = async (order: OrderRecord) => {
       html,
       attachments,
     });
+    if (!result.accepted.includes(customerEmail)) {
+      throw new Error("The mail provider did not accept the confirmation email.");
+    }
     return;
   }
 
-  await transporter.sendMail({
+  const result = await transporter.sendMail({
     from,
     to: adminEmail,
     replyTo: order.customer.email,
@@ -189,4 +208,7 @@ export const sendOrderEmails = async (order: OrderRecord) => {
     html,
     attachments,
   });
+  if (!result.accepted.includes(adminEmail)) {
+    throw new Error("The mail provider did not accept the order notification.");
+  }
 };

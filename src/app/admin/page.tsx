@@ -14,9 +14,10 @@ type MenuItem = {
 type OrderRecord = {
   id: string;
   createdAt: string;
-  status: "pending" | "paid" | "cash_pending";
+  status: "pending" | "paid" | "cash_pending" | "payment_failed";
   fulfillment: "pickup" | "delivery";
   paymentMethod: "cash" | "card";
+  emailStatus?: "pending" | "sent" | "failed";
   tip: number;
   deliveryFee: number;
   total: number;
@@ -27,6 +28,15 @@ type OrderRecord = {
     phone: string;
     address: string;
   };
+};
+
+type LaunchReadiness = {
+  stripeSecretConfigured: boolean;
+  stripePublishableConfigured: boolean;
+  stripeWebhookConfigured: boolean;
+  emailConfigured: boolean;
+  databaseConfigured: boolean;
+  requiresDatabase: boolean;
 };
 
 const emptyItem: MenuItem = {
@@ -107,6 +117,7 @@ export default function AdminPage() {
   const [isSettingsLoading, setIsSettingsLoading] = useState(true);
   const [isSettingsSaving, setIsSettingsSaving] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [launchReadiness, setLaunchReadiness] = useState<LaunchReadiness | null>(null);
 
   const loadMenu = async () => {
     setIsLoading(true);
@@ -141,10 +152,21 @@ export default function AdminPage() {
     }
   };
 
+  const loadLaunchReadiness = async () => {
+    try {
+      const response = await fetch("/api/admin/health", { cache: "no-store" });
+      if (!response.ok) return;
+      setLaunchReadiness((await response.json()) as LaunchReadiness);
+    } catch {
+      // The rest of the admin dashboard remains usable if this optional check fails.
+    }
+  };
+
   useEffect(() => {
     loadMenu();
     loadOrders();
     loadSettings();
+    loadLaunchReadiness();
   }, []);
 
   const deleteOrder = async (id: string) => {
@@ -153,6 +175,20 @@ export default function AdminPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id }),
     });
+    loadOrders();
+  };
+
+  const resendOrderEmail = async (id: string) => {
+    const response = await fetch("/api/admin/orders/email", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id }),
+    });
+    if (!response.ok) {
+      setMessage("Unable to send the receipt email. Check the mail settings and try again.");
+      return;
+    }
+    setMessage("Receipt email sent.");
     loadOrders();
   };
 
@@ -296,6 +332,34 @@ export default function AdminPage() {
             </p>
           )}
         </div>
+
+        {launchReadiness && (
+          <section className="rounded-3xl border border-white/10 bg-white/5 p-6">
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-white/60">
+              Launch readiness
+            </p>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {[
+                ["Stripe secret key", launchReadiness.stripeSecretConfigured],
+                ["Stripe publishable key", launchReadiness.stripePublishableConfigured],
+                ["Stripe payment webhook", launchReadiness.stripeWebhookConfigured],
+                ["Order email settings", launchReadiness.emailConfigured],
+                ["Order database", !launchReadiness.requiresDatabase || launchReadiness.databaseConfigured],
+              ].map(([label, ready]) => (
+                <div
+                  key={label as string}
+                  className={`rounded-2xl border px-4 py-3 text-sm ${ready ? "border-emerald-400/30 bg-emerald-400/10 text-emerald-100" : "border-amber-400/30 bg-amber-400/10 text-amber-100"}`}
+                >
+                  <p className="font-semibold">{ready ? "Ready" : "Needs setup"}</p>
+                  <p className="mt-1 text-xs opacity-80">{label as string}</p>
+                </div>
+              ))}
+            </div>
+            <p className="mt-4 text-xs text-white/60">
+              This confirms that settings are present. Use the Stripe dashboard and a test order to confirm your live account before opening orders.
+            </p>
+          </section>
+        )}
 
         <section className="rounded-3xl border border-white/10 bg-white/5 p-6">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -522,6 +586,9 @@ export default function AdminPage() {
                       <p className="mt-2 text-xs text-white/50">
                         Status: {order.status}
                       </p>
+                      <p className="mt-1 text-xs text-white/50">
+                        Email: {order.emailStatus ?? "pending"}
+                      </p>
                     </div>
                   </div>
                   <div className="mt-4 space-y-2">
@@ -541,7 +608,15 @@ export default function AdminPage() {
                     <span>Tip: ${order.tip.toFixed(2)}</span>
                     <span>Delivery fee: ${order.deliveryFee.toFixed(2)}</span>
                   </div>
-                  <div className="mt-4 flex justify-end">
+                  <div className="mt-4 flex justify-end gap-2">
+                    {order.emailStatus !== "sent" && (
+                      <button
+                        onClick={() => resendOrderEmail(order.id)}
+                        className="rounded-full border border-white/20 bg-white/10 px-4 py-2 text-xs font-semibold text-white transition hover:bg-white/20"
+                      >
+                        Send receipt email
+                      </button>
+                    )}
                     <button
                       onClick={() => deleteOrder(order.id)}
                       className="rounded-full border border-white/20 bg-white/10 px-4 py-2 text-xs font-semibold text-white transition hover:bg-white/20"

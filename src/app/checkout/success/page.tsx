@@ -2,15 +2,19 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
 const MAX_RETRIES = 8;
 
 export default function CheckoutSuccessPage() {
+  const router = useRouter();
   const [message, setMessage] = useState("Checking payment status...");
   const [status, setStatus] = useState<"success" | "error" | "info">("info");
   const [receiptOrderId, setReceiptOrderId] = useState<string | null>(null);
+  const [cashFallbackOrderId, setCashFallbackOrderId] = useState<string | null>(null);
+  const [isSwitchingToCash, setIsSwitchingToCash] = useState(false);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -19,6 +23,7 @@ export default function CheckoutSuccessPage() {
     const redirectStatus = params.get("redirect_status");
     const paymentIntentParam = params.get("payment_intent");
     const orderParam = params.get("order_id");
+    const emailStatus = params.get("email");
 
     if (method === "cash") {
       if (orderParam) {
@@ -27,14 +32,15 @@ export default function CheckoutSuccessPage() {
       setStatus("success");
       setMessage(
         fulfillment === "delivery"
-          ? "Order placed! We'll deliver your food soon."
-          : "Order placed! Please pick up at Pearl Hall and pay with cash.",
+          ? `Order placed! We'll deliver your food soon.${emailStatus === "pending" ? " We’re still sending your confirmation email." : ""}`
+          : `Order placed! Please pick up at Pearl Hall and pay with cash.${emailStatus === "pending" ? " We’re still sending your confirmation email." : ""}`,
       );
       return;
     }
 
     if (redirectStatus === "failed" || redirectStatus === "canceled") {
       setStatus("error");
+      setCashFallbackOrderId(orderParam || localStorage.getItem("dormside_order_id"));
       setMessage(
         "Payment was not completed. Please return to checkout to try again.",
       );
@@ -53,6 +59,7 @@ export default function CheckoutSuccessPage() {
         setMessage("We couldn't locate your order. Please return to checkout.");
         return;
       }
+      setCashFallbackOrderId(orderId);
 
       if (!paymentIntentId) {
         setStatus("error");
@@ -106,6 +113,7 @@ export default function CheckoutSuccessPage() {
         // If payment is not succeeded yet, show error
         if (verifyData.status !== "succeeded") {
           setStatus("error");
+          setCashFallbackOrderId(orderId);
           setMessage(
             "Payment was not completed. Please return to checkout to try again.",
           );
@@ -128,6 +136,7 @@ export default function CheckoutSuccessPage() {
             error?: string;
           } | null;
           setStatus("error");
+          setCashFallbackOrderId(orderId);
           setMessage(
             errorData?.error ||
               "Payment not confirmed. Please return to checkout to try again.",
@@ -156,6 +165,28 @@ export default function CheckoutSuccessPage() {
 
     finalize();
   }, []);
+
+  const payCashInstead = async () => {
+    if (!cashFallbackOrderId) return;
+    setIsSwitchingToCash(true);
+    try {
+      const response = await fetch("/api/orders", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: cashFallbackOrderId, action: "fallback_to_cash" }),
+      });
+      const data = (await response.json().catch(() => null)) as { error?: string; emailSent?: boolean } | null;
+      if (!response.ok) throw new Error(data?.error ?? "Unable to switch to cash payment.");
+      localStorage.removeItem("dormside_cart");
+      localStorage.removeItem("dormside_order_id");
+      localStorage.removeItem("dormside_payment_intent");
+      router.replace(`/checkout/success?method=cash&order_id=${encodeURIComponent(cashFallbackOrderId)}&email=${data?.emailSent ? "sent" : "pending"}`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Unable to switch to cash payment.");
+    } finally {
+      setIsSwitchingToCash(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-[#f7f8fb] text-zinc-900">
@@ -226,6 +257,15 @@ export default function CheckoutSuccessPage() {
               </a>
             </div>
           </div>
+        )}
+        {status === "error" && cashFallbackOrderId && (
+          <button
+            onClick={() => void payCashInstead()}
+            disabled={isSwitchingToCash}
+            className="rounded-full border border-zinc-300 bg-white px-5 py-3 text-sm font-semibold text-zinc-800 transition hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {isSwitchingToCash ? "Switching to cash..." : "Pay in cash or in person instead"}
+          </button>
         )}
         <Link
           href="/"

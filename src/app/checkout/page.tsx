@@ -2,7 +2,7 @@
 
 /* eslint-disable @next/next/no-img-element */
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Elements } from "@stripe/react-stripe-js";
@@ -64,6 +64,8 @@ export default function CheckoutPage() {
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isCreatingOnlineOrder, setIsCreatingOnlineOrder] = useState(false);
+  const [isPlacingCashOrder, setIsPlacingCashOrder] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("card");
   const [fulfillment, setFulfillment] = useState<Fulfillment>("pickup");
@@ -84,6 +86,8 @@ export default function CheckoutPage() {
     phone: "",
     address: "",
   });
+  const cashSubmissionInFlight = useRef(false);
+  const onlineSubmissionInFlight = useRef(false);
 
   const subtotal = useMemo(
     () =>
@@ -102,7 +106,11 @@ export default function CheckoutPage() {
   useEffect(() => {
     const stored = localStorage.getItem("dormside_cart");
     if (stored) {
-      setCartItems(JSON.parse(stored) as CartItem[]);
+      try {
+        setCartItems(JSON.parse(stored) as CartItem[]);
+      } catch {
+        localStorage.removeItem("dormside_cart");
+      }
     }
   }, []);
 
@@ -120,13 +128,6 @@ export default function CheckoutPage() {
     loadStatus();
     const interval = setInterval(loadStatus, 30000);
     return () => clearInterval(interval);
-  }, []);
-
-  useEffect(() => {
-    const storedOrderId = localStorage.getItem("dormside_order_id");
-    if (storedOrderId) {
-      setOrderId(storedOrderId);
-    }
   }, []);
 
   useEffect(() => {
@@ -156,112 +157,11 @@ export default function CheckoutPage() {
     cartItems.length > 0;
 
   useEffect(() => {
-    const createIntent = async () => {
-      if (!publishableKey) {
-        setClientSecret(null);
-        setError(
-          "Stripe is not configured. Please add NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY in Vercel and redeploy.",
-        );
-        setIsLoading(false);
-        return;
-      }
-
-      if (
-        cartItems.length === 0 ||
-        paymentMethod !== "card" ||
-        !isFormValid ||
-        !isOpen
-      ) {
-        setIsLoading(false);
-        setClientSecret(null);
-        return;
-      }
-
-      try {
-        setIsLoading(true);
-        const response = await fetch("/api/checkout", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            items: cartItems,
-            deliveryOption: fulfillment,
-            tip: tipAmount,
-          }),
-        });
-
-        if (!response.ok) {
-          const errorData = (await response.json().catch(() => null)) as {
-            error?: string;
-          } | null;
-          throw new Error(errorData?.error ?? "Unable to start checkout");
-        }
-
-        const data = (await response.json()) as { clientSecret: string };
-        setClientSecret(data.clientSecret);
-        setError(null);
-
-        if (!orderId) {
-          const orderResponse = await fetch("/api/orders", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              fulfillment,
-              paymentMethod: "card",
-              tip: tipAmount,
-              deliveryFee,
-              total,
-              items: cartItems.map((item) => ({
-                name: item.name,
-                price: item.price,
-                quantity: item.quantity,
-              })),
-              customer: {
-                ...customerInfo,
-                address: fulfillment === "delivery" ? customerInfo.address : "",
-              },
-              status: "pending",
-            }),
-          });
-
-          if (!orderResponse.ok) {
-            const orderError = (await orderResponse
-              .json()
-              .catch(() => null)) as { error?: string } | null;
-            throw new Error(orderError?.error ?? "Unable to save order");
-          }
-
-          const orderData = (await orderResponse.json()) as {
-            order?: { id?: string };
-          };
-          if (orderData.order?.id) {
-            setOrderId(orderData.order.id);
-            localStorage.setItem("dormside_order_id", orderData.order.id);
-          }
-        }
-      } catch (err) {
-        const message =
-          err instanceof Error
-            ? err.message
-            : "Unable to start checkout. Please try again.";
-        setError(message);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    createIntent();
-  }, [
-    cartItems,
-    customerInfo,
-    deliveryFee,
-    fulfillment,
-    isFormValid,
-    isOpen,
-    orderId,
-    paymentMethod,
-    tipAmount,
-    total,
-  ]);
+    if (!publishableKey) {
+      setError("Online payment is unavailable right now. You can still place a cash order.");
+    }
+    setIsLoading(false);
+  }, []);
 
   const handleInfoChange = (
     field: keyof typeof customerInfo,
@@ -280,6 +180,11 @@ export default function CheckoutPage() {
       return;
     }
     const createCashOrder = async () => {
+      if (cashSubmissionInFlight.current) return;
+      cashSubmissionInFlight.current = true;
+      setIsPlacingCashOrder(true);
+      setOrderMessage(null);
+      try {
       const response = await fetch("/api/orders", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -287,11 +192,8 @@ export default function CheckoutPage() {
           fulfillment,
           paymentMethod: "cash",
           tip: tipAmount,
-          deliveryFee,
-          total,
           items: cartItems.map((item) => ({
             name: item.name,
-            price: item.price,
             quantity: item.quantity,
           })),
           customer: {
@@ -314,6 +216,7 @@ export default function CheckoutPage() {
 
       const orderData = (await response.json()) as {
         order?: { id?: string };
+        emailSent?: boolean;
       };
       const receiptParam = orderData.order?.id
         ? `&order_id=${encodeURIComponent(orderData.order.id)}`
@@ -328,11 +231,87 @@ export default function CheckoutPage() {
       localStorage.removeItem("dormside_order_id");
       setCartItems([]);
       router.push(
-        `/checkout/success?method=cash&fulfillment=${fulfillment}${receiptParam}`,
+        `/checkout/success?method=cash&fulfillment=${fulfillment}${receiptParam}&email=${orderData.emailSent ? "sent" : "pending"}`,
       );
+      } catch {
+        setOrderMessage("Unable to place cash order. Please check your connection and try again.");
+      } finally {
+        cashSubmissionInFlight.current = false;
+        setIsPlacingCashOrder(false);
+      }
     };
 
     createCashOrder();
+  };
+
+  const handleStartOnlinePayment = async () => {
+    setSubmitAttempted(true);
+    if (!isFormValid || !isOpen || !publishableKey) return;
+    if (onlineSubmissionInFlight.current) return;
+    onlineSubmissionInFlight.current = true;
+    setIsCreatingOnlineOrder(true);
+    setError(null);
+    try {
+      const orderResponse = await fetch("/api/orders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fulfillment,
+          paymentMethod: "card",
+          tip: tipAmount,
+          items: cartItems.map((item) => ({ name: item.name, quantity: item.quantity })),
+          customer: { ...customerInfo, address: fulfillment === "delivery" ? customerInfo.address : "" },
+        }),
+      });
+      const orderData = (await orderResponse.json().catch(() => null)) as { order?: { id?: string }; error?: string } | null;
+      if (!orderResponse.ok || !orderData?.order?.id) throw new Error(orderData?.error ?? "Unable to save your order.");
+
+      const newOrderId = orderData.order.id;
+      setOrderId(newOrderId);
+      localStorage.setItem("dormside_order_id", newOrderId);
+      const checkoutResponse = await fetch("/api/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderId: newOrderId }),
+      });
+      const checkoutData = (await checkoutResponse.json().catch(() => null)) as { clientSecret?: string; error?: string } | null;
+      if (!checkoutResponse.ok || !checkoutData?.clientSecret) throw new Error(checkoutData?.error ?? "Unable to start online payment.");
+      setClientSecret(checkoutData.clientSecret);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to start online payment. Please try again.");
+    } finally {
+      onlineSubmissionInFlight.current = false;
+      setIsCreatingOnlineOrder(false);
+    }
+  };
+
+  const handleCashFallback = async () => {
+    if (!orderId) {
+      setPaymentMethod("cash");
+      return;
+    }
+    if (cashSubmissionInFlight.current) return;
+    cashSubmissionInFlight.current = true;
+    setIsPlacingCashOrder(true);
+    setOrderMessage(null);
+    try {
+      const response = await fetch("/api/orders", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: orderId, action: "fallback_to_cash" }),
+      });
+      const data = (await response.json().catch(() => null)) as { error?: string; emailSent?: boolean } | null;
+      if (!response.ok) throw new Error(data?.error ?? "Unable to switch to cash payment.");
+      localStorage.removeItem("dormside_cart");
+      localStorage.removeItem("dormside_order_id");
+      localStorage.removeItem("dormside_payment_intent");
+      router.push(`/checkout/success?method=cash&fulfillment=${fulfillment}&order_id=${encodeURIComponent(orderId)}&email=${data?.emailSent ? "sent" : "pending"}`);
+    } catch (err) {
+      setOrderMessage(err instanceof Error ? err.message : "Unable to switch to cash payment.");
+    } finally {
+      cashSubmissionInFlight.current = false;
+      setIsPlacingCashOrder(false);
+    }
   };
 
   return (
@@ -409,6 +388,7 @@ export default function CheckoutPage() {
               <div className="mt-4 grid gap-3 sm:grid-cols-2">
                 <button
                   onClick={() => setFulfillment("pickup")}
+                  disabled={Boolean(orderId)}
                   className={`rounded-xl border px-3 py-3 text-left text-sm font-semibold transition ${
                     fulfillment === "pickup"
                       ? "border-emerald-200 bg-emerald-50 text-emerald-700"
@@ -421,6 +401,7 @@ export default function CheckoutPage() {
                 </button>
                 <button
                   onClick={() => setFulfillment("delivery")}
+                  disabled={Boolean(orderId)}
                   className={`rounded-xl border px-3 py-3 text-left text-sm font-semibold transition ${
                     fulfillment === "delivery"
                       ? "border-emerald-200 bg-emerald-50 text-emerald-700"
@@ -442,6 +423,7 @@ export default function CheckoutPage() {
                   Full name
                   <input
                     value={customerInfo.name}
+                    disabled={Boolean(orderId)}
                     onChange={(event) =>
                       handleInfoChange("name", event.target.value)
                     }
@@ -459,6 +441,7 @@ export default function CheckoutPage() {
                   Phone number
                   <input
                     value={customerInfo.phone}
+                    disabled={Boolean(orderId)}
                     onChange={(event) =>
                       handleInfoChange("phone", event.target.value)
                     }
@@ -476,6 +459,7 @@ export default function CheckoutPage() {
                   Your email
                   <input
                     value={customerInfo.email}
+                    disabled={Boolean(orderId)}
                     onChange={(event) =>
                       handleInfoChange("email", event.target.value)
                     }
@@ -494,6 +478,7 @@ export default function CheckoutPage() {
                     Building and room number
                     <input
                       value={customerInfo.address}
+                      disabled={Boolean(orderId)}
                       onChange={(event) =>
                         handleInfoChange("address", event.target.value)
                       }
@@ -520,6 +505,7 @@ export default function CheckoutPage() {
                 <span className="text-sm font-semibold text-zinc-500">$</span>
                 <input
                   value={tipInput}
+                  disabled={Boolean(orderId)}
                   onChange={(event) => setTipInput(event.target.value)}
                   placeholder="0.00"
                   inputMode="decimal"
@@ -536,7 +522,8 @@ export default function CheckoutPage() {
               </p>
               <div className="mt-4 grid gap-3">
                 <button
-                  onClick={() => setPaymentMethod("cash")}
+                  onClick={() => void handleCashFallback()}
+                  disabled={isPlacingCashOrder}
                   className={`rounded-xl border px-3 py-3 text-left text-sm font-semibold transition ${
                     paymentMethod === "cash"
                       ? "border-emerald-200 bg-emerald-50 text-emerald-700"
@@ -550,6 +537,7 @@ export default function CheckoutPage() {
                 </button>
                 <button
                   onClick={() => setPaymentMethod("card")}
+                  disabled={Boolean(orderId)}
                   className={`rounded-xl border px-3 py-3 text-left text-sm font-semibold transition ${
                     paymentMethod === "card"
                       ? "border-emerald-200 bg-emerald-50 text-emerald-700"
@@ -570,10 +558,6 @@ export default function CheckoutPage() {
                   <div className="h-5 w-40 animate-pulse rounded-full bg-zinc-200" />
                   <div className="mt-4 h-10 w-full animate-pulse rounded-2xl bg-zinc-200" />
                 </div>
-              ) : error ? (
-                <div className="rounded-3xl border border-red-200 bg-red-50 p-6 text-sm text-red-700">
-                  {error}
-                </div>
               ) : clientSecret ? (
                 <Elements
                   stripe={stripePromise}
@@ -587,11 +571,30 @@ export default function CheckoutPage() {
                       email: customerInfo.email,
                       phone: customerInfo.phone,
                     }}
+                    onPayCashInstead={handleCashFallback}
                   />
                 </Elements>
               ) : (
-                <div className="rounded-3xl border border-zinc-200 bg-white p-6 text-sm text-zinc-600">
-                  Complete your info to continue with online payment.
+                <div className={`rounded-3xl border p-6 text-sm ${error ? "border-red-200 bg-red-50 text-red-700" : "border-zinc-200 bg-white text-zinc-600"}`}>
+                  <p>{error ?? "Complete your info to continue with online payment."}</p>
+                  {publishableKey && (
+                    <button
+                      onClick={() => void handleStartOnlinePayment()}
+                      disabled={!isFormValid || !isOpen || isCreatingOnlineOrder}
+                      className="mt-4 w-full rounded-full bg-zinc-900 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-zinc-900/20 transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {isCreatingOnlineOrder ? "Preparing secure payment..." : "Continue to secure payment"}
+                    </button>
+                  )}
+                  {orderId && (
+                    <button
+                      onClick={() => void handleCashFallback()}
+                      disabled={isPlacingCashOrder}
+                      className="mt-3 w-full rounded-full border border-zinc-300 bg-white px-4 py-3 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {isPlacingCashOrder ? "Switching to cash..." : "Pay in cash or in person instead"}
+                    </button>
+                  )}
                 </div>
               )
             ) : (
@@ -602,10 +605,10 @@ export default function CheckoutPage() {
                 </p>
                 <button
                   onClick={handlePlaceCashOrder}
-                  disabled={!isFormValid || !isOpen}
+                  disabled={!isFormValid || !isOpen || isPlacingCashOrder}
                   className="mt-4 w-full rounded-full bg-zinc-900 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-zinc-900/20 transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  Place cash order
+                  {isPlacingCashOrder ? "Placing order..." : "Place cash order"}
                 </button>
                 {!isFormValid && (
                   <p className="mt-3 text-xs text-red-600">

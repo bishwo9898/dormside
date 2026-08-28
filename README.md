@@ -1,3 +1,34 @@
+## Launch checklist
+
+Before accepting real orders, configure these environment variables in the hosting provider (not just in a local `.env` file):
+
+```text
+STRIPE_SECRET_KEY=sk_live_...
+NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_live_...
+STRIPE_WEBHOOK_SECRET=whsec_...
+DATABASE_URL=postgresql://...
+EMAIL_HOST=smtp.gmail.com
+EMAIL_PORT=465
+EMAIL_USER=orders@your-domain.example
+EMAIL_PASS=your-16-character-gmail-app-password
+EMAIL_FROM=Dormside Eats <orders@your-domain.example>
+ADMIN_USERNAME=...
+ADMIN_PASSWORD=...
+ADMIN_SESSION_SECRET=long-random-secret
+```
+
+Stripe must be configured to send `payment_intent.succeeded` events to:
+
+```text
+https://YOUR-DOMAIN/api/stripe/webhook
+```
+
+Use a real Postgres `DATABASE_URL` when deploying to Vercel; its filesystem is not durable, so the app intentionally refuses to save live orders there without a database. The authenticated admin page includes a launch-readiness panel that checks whether the required payment, webhook, email, and database settings are present.
+
+For Gmail, `EMAIL_PASS` must be a current Google App Password. It is not the regular Gmail password; spaces shown by Google are removed automatically.
+
+---
+
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
 ## Getting Started

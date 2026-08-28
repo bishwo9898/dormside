@@ -15,6 +15,12 @@ const requiresAdminForApi = (pathname: string, method: string) => {
   if (pathname === "/api/orders" && (method === "GET" || method === "DELETE")) {
     return true;
   }
+  if (pathname === "/api/admin/orders/email" && method === "POST") {
+    return true;
+  }
+  if (pathname === "/api/admin/health" && method === "GET") {
+    return true;
+  }
   return false;
 };
 

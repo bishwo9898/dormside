@@ -21,9 +21,12 @@ export type OrderCustomer = {
 export type OrderRecord = {
   id: string;
   createdAt: string;
-  status: "pending" | "paid" | "cash_pending";
+  status: "pending" | "paid" | "cash_pending" | "payment_failed";
   fulfillment: "pickup" | "delivery";
   paymentMethod: "cash" | "card";
+  paymentIntentId?: string;
+  emailStatus?: "pending" | "sent" | "failed";
+  emailSentAt?: string;
   tip: number;
   deliveryFee: number;
   total: number;
@@ -68,13 +71,19 @@ const ensureOrdersTable = async () => {
       customer jsonb not null
     );
   `);
+  await pool.query(`
+    alter table orders
+      add column if not exists payment_intent_id text,
+      add column if not exists email_status text,
+      add column if not exists email_sent_at timestamptz;
+  `);
 };
 
 const readOrdersFile = async (): Promise<OrderRecord[]> => {
   if (useDatabase && pool) {
     await ensureOrdersTable();
     const result = await pool.query(
-      `select id, created_at, status, fulfillment, payment_method, tip, delivery_fee, total, items, customer
+      `select id, created_at, status, fulfillment, payment_method, payment_intent_id, email_status, email_sent_at, tip, delivery_fee, total, items, customer
        from orders
        order by created_at desc`,
     );
@@ -84,6 +93,11 @@ const readOrdersFile = async (): Promise<OrderRecord[]> => {
       status: row.status as OrderRecord["status"],
       fulfillment: row.fulfillment as OrderRecord["fulfillment"],
       paymentMethod: row.payment_method as OrderRecord["paymentMethod"],
+      paymentIntentId: (row.payment_intent_id as string | null) ?? undefined,
+      emailStatus: (row.email_status as OrderRecord["emailStatus"]) ?? "pending",
+      emailSentAt: row.email_sent_at
+        ? new Date(row.email_sent_at as string).toISOString()
+        : undefined,
       tip: Number(row.tip),
       deliveryFee: Number(row.delivery_fee),
       total: Number(row.total),
@@ -133,15 +147,18 @@ export const createOrder = async (
     const id = randomUUID();
     const createdAt = new Date().toISOString();
     const result = await pool.query(
-      `insert into orders (id, created_at, status, fulfillment, payment_method, tip, delivery_fee, total, items, customer)
-       values ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10::jsonb)
-       returning id, created_at, status, fulfillment, payment_method, tip, delivery_fee, total, items, customer`,
+      `insert into orders (id, created_at, status, fulfillment, payment_method, payment_intent_id, email_status, email_sent_at, tip, delivery_fee, total, items, customer)
+       values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, $12::jsonb)
+       returning id, created_at, status, fulfillment, payment_method, payment_intent_id, email_status, email_sent_at, tip, delivery_fee, total, items, customer`,
       [
         id,
         createdAt,
         order.status,
         order.fulfillment,
         order.paymentMethod,
+        order.paymentIntentId ?? null,
+        order.emailStatus ?? "pending",
+        order.emailSentAt ?? null,
         order.tip,
         order.deliveryFee,
         order.total,
@@ -156,6 +173,11 @@ export const createOrder = async (
       status: row.status as OrderRecord["status"],
       fulfillment: row.fulfillment as OrderRecord["fulfillment"],
       paymentMethod: row.payment_method as OrderRecord["paymentMethod"],
+      paymentIntentId: (row.payment_intent_id as string | null) ?? undefined,
+      emailStatus: (row.email_status as OrderRecord["emailStatus"]) ?? "pending",
+      emailSentAt: row.email_sent_at
+        ? new Date(row.email_sent_at as string).toISOString()
+        : undefined,
       tip: Number(row.tip),
       deliveryFee: Number(row.delivery_fee),
       total: Number(row.total),
@@ -183,7 +205,7 @@ export const updateOrderStatus = async (
     await ensureOrdersTable();
     const result = await pool.query(
       `update orders set status = $1 where id = $2
-       returning id, created_at, status, fulfillment, payment_method, tip, delivery_fee, total, items, customer`,
+       returning id, created_at, status, fulfillment, payment_method, payment_intent_id, email_status, email_sent_at, tip, delivery_fee, total, items, customer`,
       [status, id],
     );
     if (result.rows.length === 0) {
@@ -196,6 +218,11 @@ export const updateOrderStatus = async (
       status: row.status as OrderRecord["status"],
       fulfillment: row.fulfillment as OrderRecord["fulfillment"],
       paymentMethod: row.payment_method as OrderRecord["paymentMethod"],
+      paymentIntentId: (row.payment_intent_id as string | null) ?? undefined,
+      emailStatus: (row.email_status as OrderRecord["emailStatus"]) ?? "pending",
+      emailSentAt: row.email_sent_at
+        ? new Date(row.email_sent_at as string).toISOString()
+        : undefined,
       tip: Number(row.tip),
       deliveryFee: Number(row.delivery_fee),
       total: Number(row.total),
@@ -210,6 +237,82 @@ export const updateOrderStatus = async (
   );
   await writeOrdersFile(next);
   return next.find((order) => order.id === id) ?? null;
+};
+
+export const setOrderPaymentIntent = async (id: string, paymentIntentId: string) => {
+  if (useDatabase && pool) {
+    await ensureOrdersTable();
+    const result = await pool.query(
+      `update orders set payment_intent_id = $1 where id = $2
+       returning id, created_at, status, fulfillment, payment_method, payment_intent_id, email_status, email_sent_at, tip, delivery_fee, total, items, customer`,
+      [paymentIntentId, id],
+    );
+    if (result.rows.length === 0) return null;
+    const row = result.rows[0];
+    return {
+      id: row.id as string,
+      createdAt: new Date(row.created_at as string).toISOString(),
+      status: row.status as OrderRecord["status"],
+      fulfillment: row.fulfillment as OrderRecord["fulfillment"],
+      paymentMethod: row.payment_method as OrderRecord["paymentMethod"],
+      paymentIntentId: row.payment_intent_id as string,
+      emailStatus: (row.email_status as OrderRecord["emailStatus"]) ?? "pending",
+      emailSentAt: row.email_sent_at ? new Date(row.email_sent_at as string).toISOString() : undefined,
+      tip: Number(row.tip), deliveryFee: Number(row.delivery_fee), total: Number(row.total),
+      items: row.items as OrderItem[], customer: row.customer as OrderCustomer,
+    };
+  }
+  const orders = await readOrdersFile();
+  const next = orders.map((order) => order.id === id ? { ...order, paymentIntentId } : order);
+  await writeOrdersFile(next);
+  return next.find((order) => order.id === id) ?? null;
+};
+
+export const convertOrderToCash = async (id: string) => {
+  if (useDatabase && pool) {
+    await ensureOrdersTable();
+    const result = await pool.query(
+      `update orders set payment_method = 'cash', status = 'cash_pending' where id = $1 and status = 'pending'
+       returning id, created_at, status, fulfillment, payment_method, payment_intent_id, email_status, email_sent_at, tip, delivery_fee, total, items, customer`,
+      [id],
+    );
+    if (result.rows.length === 0) return null;
+    const row = result.rows[0];
+    return {
+      id: row.id as string, createdAt: new Date(row.created_at as string).toISOString(),
+      status: row.status as OrderRecord["status"], fulfillment: row.fulfillment as OrderRecord["fulfillment"],
+      paymentMethod: row.payment_method as OrderRecord["paymentMethod"], paymentIntentId: (row.payment_intent_id as string | null) ?? undefined,
+      emailStatus: (row.email_status as OrderRecord["emailStatus"]) ?? "pending", emailSentAt: row.email_sent_at ? new Date(row.email_sent_at as string).toISOString() : undefined,
+      tip: Number(row.tip), deliveryFee: Number(row.delivery_fee), total: Number(row.total), items: row.items as OrderItem[], customer: row.customer as OrderCustomer,
+    };
+  }
+  const orders = await readOrdersFile();
+  let converted: OrderRecord | null = null;
+  const next = orders.map((order) => {
+    if (order.id !== id || order.status !== "pending") return order;
+    converted = { ...order, paymentMethod: "cash", status: "cash_pending" };
+    return converted;
+  });
+  if (!converted) return null;
+  await writeOrdersFile(next);
+  return converted;
+};
+
+export const updateOrderEmailStatus = async (
+  id: string,
+  emailStatus: NonNullable<OrderRecord["emailStatus"]>,
+) => {
+  const emailSentAt = emailStatus === "sent" ? new Date().toISOString() : undefined;
+  if (useDatabase && pool) {
+    await ensureOrdersTable();
+    await pool.query(
+      `update orders set email_status = $1, email_sent_at = $2 where id = $3`,
+      [emailStatus, emailSentAt ?? null, id],
+    );
+    return;
+  }
+  const orders = await readOrdersFile();
+  await writeOrdersFile(orders.map((order) => order.id === id ? { ...order, emailStatus, emailSentAt } : order));
 };
 
 export const deleteOrder = async (id: string) => {
