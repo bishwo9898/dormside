@@ -19,7 +19,7 @@ const geistMono = localFont({
 export const metadata: Metadata = {
   title: "Dormside Eats",
   description:
-    "Good food. A little closer. Order your Dormside favorites for free pickup at Pearl Hall or delivery to your door.",
+    "Order food from Dormside. Free pickup at Pearl Hall or delivery for $3.",
 };
 
 export default function RootLayout({

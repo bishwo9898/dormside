@@ -134,6 +134,8 @@ export default function CheckoutPage() {
       const firstInvalid = (Object.keys(errors) as (keyof Customer)[]).find(
         (key) => errors[key],
       );
+      if (!firstInvalid)
+        document.getElementById("tip-details")?.setAttribute("open", "");
       document
         .getElementById(firstInvalid ? `customer-${firstInvalid}` : "tip-input")
         ?.focus();
@@ -278,18 +280,17 @@ export default function CheckoutPage() {
         ) : cartItems.length === 0 ? (
           <div className="checkout-empty">
             <Icon name="bag" size={43} />
-            <h1>Your next good bite awaits.</h1>
-            <p>Your bag is empty. Let’s find something you’ll love.</p>
+            <h1>Your bag is empty.</h1>
+            <p>Add something from the menu to start your order.</p>
             <Link href="/#menu" className="primary-button">
-              Explore the menu <Icon name="arrow" size={18} />
+              Browse menu <Icon name="arrow" size={18} />
             </Link>
           </div>
         ) : (
           <>
             <div className="checkout-title">
-              <p className="eyebrow">ONE STEP CLOSER TO THE GOOD STUFF</p>
-              <h1>Make it yours.</h1>
-              <p>A few details, and your next good meal is on its way.</p>
+              <h1>Checkout</h1>
+              <p>Choose pickup or delivery and confirm your order.</p>
             </div>
             {isOpen !== true && (
               <div className="notice" role="status">
@@ -311,13 +312,7 @@ export default function CheckoutPage() {
             <div className="checkout-layout">
               <fieldset className="checkout-fields" disabled={locked}>
                 <section className="checkout-panel">
-                  <h2 className="panel-title">
-                    <span className="step-number">1</span>How are you getting
-                    your food?
-                  </h2>
-                  <p className="panel-description">
-                    Meet us at Pearl Hall, or let us come to you.
-                  </p>
+                  <h2 className="panel-title">Pickup or delivery</h2>
                   <div className="option-grid">
                     <button
                       className="option-card"
@@ -325,7 +320,7 @@ export default function CheckoutPage() {
                       onClick={() => setFulfillment("pickup")}
                     >
                       <Icon name="bag" />
-                      <strong>Pick it up</strong>
+                      <strong>Pickup</strong>
                       <span>
                         Pearl Hall
                         <br />
@@ -338,7 +333,7 @@ export default function CheckoutPage() {
                       onClick={() => setFulfillment("delivery")}
                     >
                       <Icon name="bike" />
-                      <strong>Bring it to me</strong>
+                      <strong>Delivery</strong>
                       <span>
                         Your building & room
                         <br />
@@ -348,11 +343,9 @@ export default function CheckoutPage() {
                   </div>
                 </section>
                 <section className="checkout-panel">
-                  <h2 className="panel-title">
-                    <span className="step-number">2</span>A little about you
-                  </h2>
+                  <h2 className="panel-title">Contact details</h2>
                   <p className="panel-description">
-                    So we know who’s hungry and where to send the receipt.
+                    We’ll send your receipt to this email.
                   </p>
                   <div className="form-grid">
                     {field("name", "Full name", "Your name", "text", "name")}
@@ -380,19 +373,13 @@ export default function CheckoutPage() {
                       )}
                   </div>
                 </section>
-                <section className="checkout-panel">
-                  <h2 className="panel-title">
-                    <Icon name="heart" size={19} />A little extra love{" "}
-                    <span
-                      className="panel-description"
-                      style={{ margin: "0 0 0 auto", fontWeight: 400 }}
-                    >
-                      Optional
-                    </span>
-                  </h2>
-                  <p className="panel-description">
-                    Leave a tip for the team. No pressure.
-                  </p>
+                <details
+                  id="tip-details"
+                  className="checkout-panel tip-details"
+                >
+                  <summary>
+                    Add a tip <span>Optional</span>
+                  </summary>
                   <div className="tip-options" aria-label="Choose a tip">
                     {[0, 1, 2, 3].map((amount) => (
                       <button
@@ -423,15 +410,9 @@ export default function CheckoutPage() {
                       Enter a positive amount with up to two decimal places.
                     </p>
                   )}
-                </section>
+                </details>
                 <section className="checkout-panel">
-                  <h2 className="panel-title">
-                    <span className="step-number">3</span>How would you like to
-                    pay?
-                  </h2>
-                  <p className="panel-description">
-                    Choose what works for you.
-                  </p>
+                  <h2 className="panel-title">Payment</h2>
                   <div className="option-grid">
                     <button
                       className="option-card"
@@ -465,7 +446,7 @@ export default function CheckoutPage() {
                 aria-label="Order summary"
               >
                 <div className="summary-heading">
-                  <h2>Your good-food lineup</h2>
+                  <h2>Your order</h2>
                   <Link href="/#menu">Edit bag</Link>
                 </div>
                 {cartItems.map((item) => (
@@ -586,9 +567,6 @@ export default function CheckoutPage() {
                 </div>
               </aside>
             </div>
-            <p className="checkout-footer-note">
-              <Icon name="heart" size={13} /> Good food. A little closer.
-            </p>
           </>
         )}
       </main>

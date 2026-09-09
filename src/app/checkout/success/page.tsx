@@ -204,18 +204,11 @@ export default function CheckoutSuccessPage() {
             size={35}
           />
         </div>
-        <p className="eyebrow">
-          {status === "success"
-            ? "GOOD FOOD IS ON THE WAY"
-            : status === "error"
-              ? "LET’S GET THIS SORTED"
-              : "JUST A MOMENT"}
-        </p>
         <h1>
           {status === "success"
             ? "Thanks for your order!"
             : status === "error"
-              ? "A little hiccup."
+              ? "Payment not completed"
               : "Checking your payment."}
         </h1>
         <p
@@ -226,7 +219,7 @@ export default function CheckoutSuccessPage() {
         </p>
         {status === "success" && receiptOrderId && (
           <section className="checkout-panel success-receipt">
-            <h2>All the details, right here.</h2>
+            <h2>Your receipt</h2>
             <p>
               Keep a copy of your order, payment details, and pickup or delivery
               information.
@@ -237,7 +230,7 @@ export default function CheckoutSuccessPage() {
                 download
                 className="primary-button"
               >
-                Download your receipt <Icon name="arrow" size={17} />
+                Download receipt <Icon name="arrow" size={17} />
               </a>
               <a
                 href={`/api/orders/${encodeURIComponent(receiptOrderId)}/receipt?format=html`}
@@ -254,7 +247,7 @@ export default function CheckoutSuccessPage() {
           href={status === "error" ? "/checkout" : "/#menu"}
           className="text-button"
         >
-          {status === "error" ? "Return to checkout" : "Back to the good stuff"}
+          {status === "error" ? "Return to checkout" : "Back to menu"}
           <Icon name="arrow" size={17} />
         </Link>
       </main>

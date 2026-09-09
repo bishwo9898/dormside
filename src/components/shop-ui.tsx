@@ -96,24 +96,18 @@ export function FoodPhoto({
 }) {
   const src = itemImage(item);
   const [failed, setFailed] = useState<string>();
+  if (!src || src === failed) return null;
   return (
     <div className={`food-photo ${className}`} style={style}>
-      {src && src !== failed ? (
-        // Admin-managed URLs may be external; keep a graceful fallback without requiring a domain allowlist.
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={src}
-          alt={item.name}
-          loading="lazy"
-          decoding="async"
-          onError={() => setFailed(src)}
-        />
-      ) : (
-        <span className="food-placeholder">
-          <Icon name="utensils" size={34} />
-          <span>Made to enjoy</span>
-        </span>
-      )}
+      {/* Admin-supplied photos can be external. Omit unavailable images. */}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={src}
+        alt={item.name}
+        loading="lazy"
+        decoding="async"
+        onError={() => setFailed(src)}
+      />
     </div>
   );
 }
