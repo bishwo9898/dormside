@@ -2,6 +2,16 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { Brand, Icon } from "@/components/shop-ui";
+import { clearCart } from "@/components/use-cart";
+
+const readStored = (key: string) => {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+};
 
 export const dynamic = "force-dynamic";
 
@@ -42,10 +52,13 @@ export default function CheckoutSuccessPage() {
     }
 
     let retryCount = 0;
+    let active = true;
+    let retryTimer: ReturnType<typeof setTimeout> | undefined;
 
     const finalize = async (): Promise<void> => {
-      const orderId = orderParam || localStorage.getItem("dormside_order_id");
-      const storedIntent = localStorage.getItem("dormside_payment_intent");
+      if (!active) return;
+      const orderId = orderParam || readStored("dormside_order_id");
+      const storedIntent = readStored("dormside_payment_intent");
       const paymentIntentId = paymentIntentParam || storedIntent;
 
       if (!orderId) {
@@ -70,6 +83,7 @@ export default function CheckoutSuccessPage() {
           body: JSON.stringify({ paymentIntentId }),
         });
 
+        if (!active) return;
         if (!verifyResponse.ok) {
           setStatus("error");
           setMessage(
@@ -99,7 +113,7 @@ export default function CheckoutSuccessPage() {
             "Your payment is being processed. This usually takes a few seconds. Please don't close this page.",
           );
           // Retry after 2 seconds for processing payments
-          setTimeout(() => finalize(), 2000);
+          retryTimer = setTimeout(() => void finalize(), 2000);
           return;
         }
 
@@ -123,6 +137,7 @@ export default function CheckoutSuccessPage() {
           }),
         });
 
+        if (!active) return;
         if (!response.ok) {
           const errorData = (await response.json().catch(() => null)) as {
             error?: string;
@@ -139,12 +154,17 @@ export default function CheckoutSuccessPage() {
           order?: { id?: string };
         };
         setReceiptOrderId(orderData.order?.id ?? orderId);
-        localStorage.removeItem("dormside_cart");
-        localStorage.removeItem("dormside_order_id");
-        localStorage.removeItem("dormside_payment_intent");
+        clearCart();
+        try {
+          localStorage.removeItem("dormside_order_id");
+          localStorage.removeItem("dormside_payment_intent");
+        } catch {
+          /* Payment confirmation does not depend on storage access. */
+        }
         setStatus("success");
         setMessage("Payment confirmed. We're preparing your order now.");
       } catch (error) {
+        if (!active) return;
         const errorMessage =
           error instanceof Error
             ? error.message
@@ -154,86 +174,90 @@ export default function CheckoutSuccessPage() {
       }
     };
 
-    finalize();
+    void finalize();
+    return () => {
+      active = false;
+      clearTimeout(retryTimer);
+    };
   }, []);
 
   return (
-    <div className="min-h-screen bg-[#f7f8fb] text-zinc-900">
-      <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 px-6 py-12 sm:px-10">
-        <div
-          className={`rounded-3xl border p-6 text-sm ${
-            status === "error"
-              ? "border-red-200 bg-red-50 text-red-700"
-              : status === "success"
-                ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                : "border-amber-200 bg-amber-50 text-amber-700"
-          }`}
-        >
-          <p className="text-xs font-semibold uppercase tracking-[0.2em]">
-            {status === "error"
-              ? "Payment issue"
-              : status === "success"
-                ? "Order update"
-                : "Payment status"}
-          </p>
-          <h1
-            className={`mt-2 text-3xl font-semibold ${
-              status === "error"
-                ? "text-red-900"
-                : status === "success"
-                  ? "text-emerald-900"
-                  : "text-amber-900"
-            }`}
-          >
-            {status === "error"
-              ? "Payment not completed"
-              : status === "success"
-                ? "Thanks for your order!"
-                : "Checking payment"}
-          </h1>
-          <p className="mt-3 text-sm">{message}</p>
+    <div className="checkout-page">
+      <header className="checkout-header">
+        <div className="shell">
+          <Brand />
+          <Link href="/#menu" className="checkout-back">
+            <Icon name="back" size={17} /> Back to the menu
+          </Link>
         </div>
-
+      </header>
+      <main className="success-shell">
+        <div className={`success-icon ${status}`}>
+          <Icon
+            name={
+              status === "success"
+                ? "check"
+                : status === "error"
+                  ? "close"
+                  : "clock"
+            }
+            size={35}
+          />
+        </div>
+        <p className="eyebrow">
+          {status === "success"
+            ? "GOOD FOOD IS ON THE WAY"
+            : status === "error"
+              ? "LET’S GET THIS SORTED"
+              : "JUST A MOMENT"}
+        </p>
+        <h1>
+          {status === "success"
+            ? "Thanks for your order!"
+            : status === "error"
+              ? "A little hiccup."
+              : "Checking your payment."}
+        </h1>
+        <p
+          className="success-message"
+          role={status === "error" ? "alert" : "status"}
+        >
+          {message}
+        </p>
         {status === "success" && receiptOrderId && (
-          <div className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-zinc-500">
-              Receipt
+          <section className="checkout-panel success-receipt">
+            <h2>All the details, right here.</h2>
+            <p>
+              Keep a copy of your order, payment details, and pickup or delivery
+              information.
             </p>
-            <h2 className="mt-2 text-2xl font-semibold text-zinc-900">
-              Your receipt is ready
-            </h2>
-            <p className="mt-2 text-sm text-zinc-600">
-              Download a professional PDF receipt with your order details,
-              pricing, payment status, and fulfillment information.
-            </p>
-            <div className="mt-5 flex flex-col gap-3 sm:flex-row">
+            <div className="receipt-actions">
               <a
                 href={`/api/orders/${encodeURIComponent(receiptOrderId)}/receipt`}
                 download
-                className="rounded-full bg-zinc-900 px-5 py-3 text-center text-sm font-semibold text-white shadow-lg shadow-zinc-900/15 transition hover:bg-zinc-800"
+                className="primary-button"
               >
-                Download PDF receipt
+                Download your receipt <Icon name="arrow" size={17} />
               </a>
               <a
-                href={`/api/orders/${encodeURIComponent(
-                  receiptOrderId,
-                )}/receipt?format=html`}
+                href={`/api/orders/${encodeURIComponent(receiptOrderId)}/receipt?format=html`}
                 target="_blank"
                 rel="noreferrer"
-                className="rounded-full border border-zinc-200 bg-white px-5 py-3 text-center text-sm font-semibold text-zinc-700 transition hover:border-zinc-300 hover:bg-zinc-50"
+                className="text-button"
               >
-                Open printable copy
+                Open a printable copy <Icon name="arrow" size={15} />
               </a>
             </div>
-          </div>
+          </section>
         )}
         <Link
-          href="/"
-          className="text-sm font-semibold text-zinc-600 transition hover:text-zinc-900"
+          href={status === "error" ? "/checkout" : "/#menu"}
+          className="text-button"
         >
-          Back to home
+          {status === "error" ? "Return to checkout" : "Back to the good stuff"}
+          <Icon name="arrow" size={17} />
         </Link>
-      </div>
+      </main>
     </div>
   );
 }

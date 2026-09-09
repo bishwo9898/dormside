@@ -1,29 +1,29 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   PaymentElement,
   useElements,
   useStripe,
 } from "@stripe/react-stripe-js";
-
-type BillingDetails = {
-  name: string;
-  email: string;
-  phone: string;
-};
+import { Icon } from "@/components/shop-ui";
+import { money } from "@/lib/shop";
 
 type CheckoutFormProps = {
   disabled: boolean;
-  billingDetails: BillingDetails;
+  billingDetails: { name: string; email: string; phone: string };
   orderId: string | null;
+  total: number;
+  onSubmittingChange: (busy: boolean) => void;
 };
 
 export default function CheckoutForm({
   disabled,
   billingDetails,
   orderId,
+  total,
+  onSubmittingChange,
 }: CheckoutFormProps) {
   const stripe = useStripe();
   const elements = useElements();
@@ -31,86 +31,102 @@ export default function CheckoutForm({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [hasSucceeded, setHasSucceeded] = useState(false);
+  const submitting = useRef(false);
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!stripe || !elements || hasSucceeded) {
+    if (
+      !stripe ||
+      !elements ||
+      hasSucceeded ||
+      disabled ||
+      submitting.current ||
+      !orderId
+    )
       return;
-    }
-
+    submitting.current = true;
     setIsSubmitting(true);
+    onSubmittingChange(true);
     setMessage(null);
-    localStorage.removeItem("dormside_payment_intent");
-
     const getSuccessPath = (paymentIntentId?: string) => {
-      const params = new URLSearchParams();
-      if (paymentIntentId) {
-        params.set("payment_intent", paymentIntentId);
-      }
-      if (orderId) {
-        params.set("order_id", orderId);
-      }
-      const query = params.toString();
-      return `/checkout/success${query ? `?${query}` : ""}`;
+      const params = new URLSearchParams({ order_id: orderId });
+      if (paymentIntentId) params.set("payment_intent", paymentIntentId);
+      return `/checkout/success?${params}`;
     };
-
-    const result = await stripe.confirmPayment({
-      elements,
-      confirmParams: {
-        return_url: new URL(getSuccessPath(), window.location.origin).toString(),
-        payment_method_data: {
-          billing_details: {
-            name: billingDetails.name,
-            email: billingDetails.email,
-            phone: billingDetails.phone,
-          },
-        },
-      },
-      redirect: "if_required",
-    });
-    const paymentIntentId = result.paymentIntent?.id;
-
-    if (result.error) {
-      if (paymentIntentId) {
-        localStorage.setItem("dormside_payment_intent", paymentIntentId);
+    try {
+      try {
+        localStorage.removeItem("dormside_payment_intent");
+      } catch {
+        /* IDs are included in the return URL. */
       }
-      if (result.error.code === "payment_intent_unexpected_state") {
+      const result = await stripe.confirmPayment({
+        elements,
+        confirmParams: {
+          return_url: new URL(
+            getSuccessPath(),
+            window.location.origin,
+          ).toString(),
+          payment_method_data: { billing_details: billingDetails },
+        },
+        redirect: "if_required",
+      });
+      const paymentIntentId = result.paymentIntent?.id;
+      if (paymentIntentId) {
+        try {
+          localStorage.setItem("dormside_payment_intent", paymentIntentId);
+        } catch {
+          /* IDs are included in the return URL. */
+        }
+      }
+      if (
+        result.paymentIntent?.status === "succeeded" ||
+        result.paymentIntent?.status === "processing" ||
+        result.error?.code === "payment_intent_unexpected_state"
+      ) {
         setHasSucceeded(true);
         router.push(getSuccessPath(paymentIntentId));
         return;
       }
-      setMessage(result.error.message ?? "Payment failed. Please try again.");
-    } else if (
-      result.paymentIntent?.status === "succeeded" ||
-      result.paymentIntent?.status === "processing"
-    ) {
-      setHasSucceeded(true);
-      if (paymentIntentId) {
-        localStorage.setItem("dormside_payment_intent", paymentIntentId);
-      }
-      router.push(getSuccessPath(paymentIntentId));
-      return;
+      setMessage(
+        result.error?.message ??
+          "Payment wasn’t completed. Please check your details and try again.",
+      );
+    } catch {
+      setMessage(
+        "We couldn’t confirm the payment. Please check your connection and try again.",
+      );
+    } finally {
+      submitting.current = false;
+      setIsSubmitting(false);
+      onSubmittingChange(false);
     }
-
-    setIsSubmitting(false);
   };
 
   return (
-    <form
-      onSubmit={handleSubmit}
-      className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm"
-    >
+    <form onSubmit={handleSubmit}>
       <PaymentElement />
       {message && (
-        <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+        <div className="checkout-error" role="alert">
           {message}
         </div>
       )}
       <button
-        disabled={!stripe || isSubmitting || disabled || hasSucceeded}
-        className="mt-6 w-full rounded-full bg-zinc-900 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-zinc-900/20 transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-60"
+        disabled={
+          !stripe ||
+          !elements ||
+          isSubmitting ||
+          disabled ||
+          hasSucceeded ||
+          !orderId
+        }
+        className="primary-button"
       >
-        {isSubmitting ? "Processing..." : "Pay now"}
+        {hasSucceeded
+          ? "Payment received"
+          : isSubmitting
+            ? "Processing payment…"
+            : `Pay ${money(total)}`}
+        <Icon name="lock" size={16} />
       </button>
     </form>
   );

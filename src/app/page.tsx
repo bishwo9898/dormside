@@ -1,542 +1,670 @@
 "use client";
 
-/* eslint-disable @next/next/no-img-element */
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Image from "next/image";
+import Link from "next/link";
+import { Brand, FoodPhoto, Icon, QuantityControl } from "@/components/shop-ui";
+import { useCart, usePreference } from "@/components/use-cart";
+import {
+  itemCategory,
+  money,
+  parsePrice,
+  type MenuItem,
+  type Fulfillment,
+} from "@/lib/shop";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-
-const fallbackMenu = [
-  {
-    name: "Cheeseburger Sliders Tray (12 pcs)",
-    description: "A dozen mini cheeseburgers served tray-style for sharing.",
-    price: "$28",
-  },
-  {
-    name: "Buffalo Wings Platter (20 pcs)",
-    description: "Twenty crispy wings tossed in buffalo sauce.",
-    price: "$24",
-  },
-  {
-    name: "Large Loaded Nacho Tray",
-    description: "Tortilla chips loaded with cheese, toppings, and salsa.",
-    price: "$22",
-  },
-  {
-    name: "Mac & Cheese Catering Pan",
-    description: "Creamy macaroni and cheese served family-style.",
-    price: "$30",
-  },
-  {
-    name: "Caesar Salad Bowl",
-    description: "Crisp romaine, parmesan, croutons, and Caesar dressing.",
-    price: "$18",
-  },
-  {
-    name: "Assorted Soft Drinks Pack",
-    description: "A chilled mix of bottled and canned soft drinks.",
-    price: "$8",
-  },
-  {
-    name: "Chocolate Chip Cookie Box",
-    description: "Fresh-baked chocolate chip cookies packed for sharing.",
-    price: "$12",
-  },
+const categories = [
+  "Everything",
+  "To share",
+  "Sides & bowls",
+  "Sweet treats",
+  "Drinks",
 ];
 
-type MenuItem = {
-  name: string;
-  description: string;
-  price: string;
-  imageUrl?: string;
-};
-
-type CartItem = MenuItem & { quantity: number };
-
-const parsePrice = (price: string) =>
-  Number(price.replace(/[^0-9.]/g, "")) || 0;
-
-const getItemInitials = (name: string) =>
-  name
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase())
-    .join("") || "DS";
-
-function MenuItemPhoto({
-  item,
-  className = "",
-  initialsClassName = "text-xl",
-}: {
-  item: MenuItem;
-  className?: string;
-  initialsClassName?: string;
-}) {
-  const imageUrl = item.imageUrl?.trim();
-  const [failedImageUrl, setFailedImageUrl] = useState<string | null>(null);
-  const shouldShowImage = Boolean(imageUrl) && failedImageUrl !== imageUrl;
-
-  return (
-    <div
-      className={`relative overflow-hidden bg-[#eef2f7] ${className}`}
-      aria-label={`${item.name} photo`}
-    >
-      {shouldShowImage ? (
-        <img
-          src={imageUrl}
-          alt={item.name}
-          className="h-full w-full object-cover"
-          onError={() => setFailedImageUrl(imageUrl ?? null)}
-        />
-      ) : (
-        <div className="flex h-full w-full items-center justify-center bg-linear-to-br from-[#fee2c7] via-[#e6eefc] to-[#d8f4ef] text-zinc-700">
-          <span className={`font-semibold ${initialsClassName}`}>
-            {getItemInitials(item.name)}
-          </span>
-        </div>
-      )}
-    </div>
-  );
-}
-
 export default function Home() {
-  const [menuItems, setMenuItems] = useState<MenuItem[]>(fallbackMenu);
-  const [isLoading, setIsLoading] = useState(true);
-  const [cartItems, setCartItems] = useState<CartItem[]>([]);
-  const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
-  const [paymentMethod, setPaymentMethod] = useState<"cash" | "card">("cash");
-  const [isOpen, setIsOpen] = useState(true);
+  const { cartItems, setCartItems } = useCart();
+  const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [menuError, setMenuError] = useState(false);
+  const [isOpen, setIsOpen] = useState<boolean | null>(null);
+  const [category, setCategory] = useState("Everything");
+  const [search, setSearch] = useState("");
+  const [savedFulfillment, setFulfillment] = usePreference(
+    "dormside_fulfillment",
+    "pickup",
+  );
+  const fulfillment: Fulfillment =
+    savedFulfillment === "delivery" ? "delivery" : "pickup";
+  const [cartOpen, setCartOpen] = useState(false);
+  const [announcement, setAnnouncement] = useState("");
+  const dialog = useRef<HTMLDialogElement>(null);
 
   const loadMenu = useCallback(async () => {
     try {
       const response = await fetch("/api/menu", { cache: "no-store" });
-      if (!response.ok) {
-        throw new Error("Failed to load menu");
-      }
-      const data = (await response.json()) as { items: MenuItem[] };
-      if (Array.isArray(data.items) && data.items.length > 0) {
-        setMenuItems(data.items);
-      }
+      if (!response.ok) throw new Error("Menu unavailable");
+      const data = await response.json();
+      if (!Array.isArray(data.items)) throw new Error("Menu unavailable");
+      setMenuItems(data.items);
+      setMenuError(false);
     } catch {
-      setMenuItems(fallbackMenu);
+      setMenuError(true);
     } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
-  const loadStatus = useCallback(async () => {
-    try {
-      const response = await fetch("/api/settings", { cache: "no-store" });
-      const data = (await response.json()) as { isOpen?: boolean };
-      setIsOpen(data.isOpen ?? true);
-    } catch {
-      setIsOpen(true);
+      setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    loadMenu();
-    loadStatus();
+    const loadStatus = async () => {
+      try {
+        const response = await fetch("/api/settings", { cache: "no-store" });
+        if (!response.ok) throw new Error("Status unavailable");
+        const data = await response.json();
+        setIsOpen(typeof data.isOpen === "boolean" ? data.isOpen : null);
+      } catch {
+        setIsOpen(null);
+      }
+    };
+    void loadMenu();
+    void loadStatus();
     const interval = setInterval(() => {
-      loadMenu();
-      loadStatus();
+      void loadMenu();
+      void loadStatus();
     }, 30000);
     return () => clearInterval(interval);
-  }, [loadMenu, loadStatus]);
+  }, [loadMenu]);
 
   useEffect(() => {
-    const stored = localStorage.getItem("dormside_cart");
-    if (stored) {
-      try {
-        setCartItems(JSON.parse(stored) as CartItem[]);
-      } catch {
-        localStorage.removeItem("dormside_cart");
-      }
-    }
-  }, []);
+    if (!cartOpen) return;
+    const element = dialog.current;
+    element?.showModal();
+    const overflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      element?.close();
+      document.body.style.overflow = overflow;
+    };
+  }, [cartOpen]);
 
-  useEffect(() => {
-    localStorage.setItem("dormside_cart", JSON.stringify(cartItems));
-  }, [cartItems]);
-
-  const cartTotal = useMemo(
-    () =>
-      cartItems.reduce(
-        (sum, item) => sum + parsePrice(item.price) * item.quantity,
-        0,
-      ),
-    [cartItems],
+  const subtotal = cartItems.reduce(
+    (sum, item) => sum + parsePrice(item.price) * item.quantity,
+    0,
   );
+  const count = cartItems.reduce((sum, item) => sum + item.quantity, 0);
+  const deliveryFee = fulfillment === "delivery" && count > 0 ? 3 : 0;
+  const total = subtotal + deliveryFee;
+  const filteredItems = useMemo(
+    () =>
+      menuItems.filter(
+        (item) =>
+          (category === "Everything" || itemCategory(item) === category) &&
+          `${item.name} ${item.description}`
+            .toLowerCase()
+            .includes(search.trim().toLowerCase()),
+      ),
+    [menuItems, category, search],
+  );
+  const canOrder = isOpen === true && !menuError;
 
-  const addToCart = (item: MenuItem) => {
-    setCartItems((prev) => {
-      const existing = prev.find((entry) => entry.name === item.name);
-      if (existing) {
-        return prev.map((entry) =>
+  const changeQuantity = (item: MenuItem, delta: number) => {
+    if (delta > 0 && !canOrder) return;
+    setCartItems((items) => {
+      const existing = items.find((entry) => entry.name === item.name);
+      if (!existing)
+        return delta > 0 ? [...items, { ...item, quantity: 1 }] : items;
+      return items
+        .map((entry) =>
           entry.name === item.name
-            ? { ...entry, quantity: entry.quantity + 1 }
+            ? { ...entry, quantity: entry.quantity + delta }
             : entry,
-        );
-      }
-      return [...prev, { ...item, quantity: 1 }];
-    });
-  };
-
-  const updateQuantity = (name: string, delta: number) => {
-    setCartItems((prev) =>
-      prev
-        .map((item) =>
-          item.name === name
-            ? { ...item, quantity: item.quantity + delta }
-            : item,
         )
-        .filter((item) => item.quantity > 0),
+        .filter((entry) => entry.quantity > 0);
+    });
+    setAnnouncement(
+      delta > 0
+        ? `${item.name} added to your bag.`
+        : `Removed one ${item.name} from your bag.`,
     );
   };
 
-  const cartCount = cartItems.reduce((sum, item) => sum + item.quantity, 0);
-  const featuredItems = useMemo(() => menuItems.slice(0, 3), [menuItems]);
-
-  const handleCheckout = () => {
-    if (cartItems.length === 0 || !isOpen) {
-      return;
+  const prepareCheckout = () => {
+    try {
+      localStorage.setItem("dormside_fulfillment", fulfillment);
+    } catch {
+      /* Checkout also lets the customer choose. */
     }
-    setIsCheckoutOpen(true);
   };
 
-  const handlePlaceOrder = () => {
-    if (cartItems.length === 0 || !isOpen) {
-      return;
-    }
-    localStorage.setItem("dormside_payment_method", paymentMethod);
-    setIsCheckoutOpen(false);
-    window.location.href = "/checkout";
-  };
+  const orderContents = (
+    <>
+      <div className="order-heading">
+        <div>
+          <span className="eyebrow">GOOD THINGS AHEAD</span>
+          <h2>
+            Your bag{" "}
+            <span className="muted-count">{count > 0 ? `(${count})` : ""}</span>
+          </h2>
+        </div>
+        <span className="order-bag-icon">
+          <Icon name="bag" size={23} />
+        </span>
+      </div>
+      <div className="fulfillment-switch" aria-label="Order type">
+        <button
+          aria-pressed={fulfillment === "pickup"}
+          onClick={() => setFulfillment("pickup")}
+        >
+          <Icon name="bag" size={17} />
+          Pickup
+        </button>
+        <button
+          aria-pressed={fulfillment === "delivery"}
+          onClick={() => setFulfillment("delivery")}
+        >
+          <Icon name="bike" size={18} />
+          Delivery
+        </button>
+      </div>
+      <p className="fulfillment-note">
+        <Icon name="pin" size={14} />
+        {fulfillment === "pickup"
+          ? "Pick up at Pearl Hall · Free"
+          : "To your building · $3 delivery"}
+      </p>
+      {count === 0 ? (
+        <div className="empty-bag">
+          <div className="empty-bag-art">
+            <Icon name="bag" size={40} />
+            <span>
+              <Icon name="heart" size={15} />
+            </span>
+          </div>
+          <h3>A little empty in here.</h3>
+          <p>
+            Find something you love.
+            <br />
+            We’ll keep it right here.
+          </p>
+          {cartOpen && (
+            <button className="text-button" onClick={() => setCartOpen(false)}>
+              Explore the menu <Icon name="arrow" size={16} />
+            </button>
+          )}
+        </div>
+      ) : (
+        <div className="bag-items">
+          {cartItems.map((item) => (
+            <div className="bag-item" key={item.name}>
+              <FoodPhoto item={item} />
+              <div className="bag-item-info">
+                <h3>{item.name}</h3>
+                <div className="bag-item-bottom">
+                  <QuantityControl
+                    name={item.name}
+                    quantity={item.quantity}
+                    onChange={(delta) => changeQuantity(item, delta)}
+                    disabled={!canOrder}
+                  />
+                  <strong>
+                    {money(parsePrice(item.price) * item.quantity)}
+                  </strong>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      <div className="order-bottom">
+        {count > 0 && (
+          <>
+            <div className="cost-row">
+              <span>Subtotal</span>
+              <span>{money(subtotal)}</span>
+            </div>
+            <div className="cost-row">
+              <span>{fulfillment === "pickup" ? "Pickup" : "Delivery"}</span>
+              <span className={fulfillment === "pickup" ? "free-label" : ""}>
+                {fulfillment === "pickup" ? "Free" : money(deliveryFee)}
+              </span>
+            </div>
+          </>
+        )}
+        <div className="total-row">
+          <span>Total</span>
+          <strong>{money(total)}</strong>
+        </div>
+        {count > 0 && canOrder ? (
+          <Link
+            href="/checkout"
+            onClick={prepareCheckout}
+            className="primary-button checkout-button"
+          >
+            Go to checkout <Icon name="arrow" size={19} />
+          </Link>
+        ) : (
+          <button className="primary-button checkout-button" disabled>
+            {!canOrder ? "Ordering unavailable" : "Add something delicious"}
+            <Icon name="arrow" size={19} />
+          </button>
+        )}
+        <p className="payment-note">
+          <Icon name="lock" size={12} /> Cash or secure online payment
+        </p>
+      </div>
+    </>
+  );
 
   return (
-    <div className="min-h-screen bg-[#f7f8fb] text-zinc-900">
-      <div className="relative overflow-hidden">
-        <div className="pointer-events-none absolute left-1/2 top-0 h-130 w-130 -translate-x-1/2 rounded-full bg-linear-to-tr from-[#ffddb4] via-[#c3dafe] to-[#d4f4ff] blur-3xl opacity-60" />
-        <div className="mx-auto flex w-full max-w-6xl flex-col gap-20 px-6 pb-20 pt-10 sm:px-10">
-          <header className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-zinc-900 text-sm font-semibold text-white">
-                DS
-              </div>
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-zinc-500">
-                  Dormside
-                </p>
-                <p className="text-lg font-semibold">Online Ordering</p>
-              </div>
-            </div>
-            <nav className="hidden items-center gap-8 text-sm font-medium text-zinc-600 md:flex">
-              <a className="transition hover:text-zinc-900" href="#menu">
-                Menu
-              </a>
-            </nav>
-            <button className="rounded-full border border-zinc-200 bg-white px-5 py-2 text-sm font-semibold text-zinc-900 shadow-sm transition hover:border-zinc-300 hover:bg-zinc-50">
-              Cart ({cartCount})
+    <div className="storefront">
+      <a href="#menu" className="skip-link">
+        Skip to menu
+      </a>
+      <header className="site-header">
+        <div className="shell header-inner">
+          <Brand />
+          <nav className="desktop-nav" aria-label="Main navigation">
+            <a href="#menu" className="active">
+              The menu
+            </a>
+            <a href="#how-it-works">How it works</a>
+          </nav>
+          <div className="header-actions">
+            <span
+              className={`open-status ${isOpen === false ? "is-closed" : ""}`}
+            >
+              <span />
+              {isOpen === null
+                ? "Checking availability"
+                : isOpen
+                  ? "Open for orders"
+                  : "Currently closed"}
+            </span>
+            <button
+              className="header-bag"
+              onClick={() => setCartOpen(true)}
+              aria-label={`Open your bag, ${count} items`}
+            >
+              <Icon name="bag" />
+              <span>Bag</span>
+              <span className="bag-count">{count}</span>
             </button>
-          </header>
-
-          <section className="grid items-center gap-12 lg:grid-cols-[1.1fr_0.9fr]">
-            <div className="flex flex-col gap-7">
-              <div className="inline-flex w-fit items-center gap-2 rounded-full border border-white/70 bg-white/80 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-zinc-500 shadow-sm">
-                Simple ordering
-              </div>
-              <h1 className="text-4xl font-semibold leading-tight text-zinc-900 sm:text-5xl">
-                A clean, fast way to order your favorites.
-              </h1>
-              <p className="text-lg leading-8 text-zinc-600">
-                Browse a focused menu, add items in seconds, and check out with
-                secure payments. Designed to feel smooth on any device.
-              </p>
-              <div className="flex flex-col gap-4 sm:flex-row">
-                <a
-                  href="#menu"
-                  className="w-full rounded-full border border-zinc-200 bg-white px-6 py-3 text-center text-sm font-semibold text-zinc-900 shadow-sm transition hover:border-zinc-300 hover:bg-zinc-50 sm:w-auto"
-                >
-                  View menu
-                </a>
+          </div>
+        </div>
+      </header>
+      <main>
+        <section className="hero shell" aria-labelledby="hero-title">
+          <div className="hero-copy">
+            <p className="eyebrow">
+              <span className="tiny-star">✳</span> GOOD FOOD. RIGHT HERE.
+            </p>
+            <h1 id="hero-title">
+              Big cravings.
+              <br />
+              <span>Little effort.</span>
+            </h1>
+            <p className="hero-description">
+              Study break? Movie night? Just hungry?
+              <br className="desktop-break" /> Your next good bite is a few taps
+              away.
+            </p>
+            <div className="hero-actions">
+              <a href="#menu" className="primary-button">
+                Find your next bite <Icon name="arrow" />
+              </a>
+              <span className="hero-pickup">
+                <Icon name="pin" size={16} /> Pickup at Pearl Hall
+              </span>
+            </div>
+            <div className="hero-perks">
+              <span>
+                <Icon name="check" size={15} /> Easy pickup
+              </span>
+              <span>
+                <Icon name="check" size={15} /> Delivery to your door
+              </span>
+              <span>
+                <Icon name="check" size={15} /> Made for sharing
+              </span>
+            </div>
+          </div>
+          <div className="hero-visual">
+            <div className="hero-photo-wrap">
+              <Image
+                src="/images/sharing-spread.webp"
+                alt="Cheeseburger sliders, buffalo wings and nachos ready to share"
+                width={1400}
+                height={933}
+                priority
+                sizes="(max-width: 640px) 100vw, 55vw"
+              />
+            </div>
+            <div className="hero-stamp">
+              <Icon name="spark" size={21} />
+              <span>
+                GOOD FOOD.
+                <br />
+                GOOD COMPANY.
+              </span>
+            </div>
+            <div className="hero-caption">
+              <span className="caption-icon">
+                <Icon name="utensils" size={20} />
+              </span>
+              <div>
+                <strong>Bring your appetite.</strong>
+                <span>There’s plenty to go around.</span>
               </div>
             </div>
-
-            <div className="rounded-3xl border border-white/80 bg-white/70 p-6 shadow-xl">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-semibold text-zinc-500">Today</p>
-                  <p className="text-xl font-semibold">Menu highlights</p>
-                </div>
-                <span
-                  className={`rounded-full px-3 py-1 text-xs font-semibold ${
-                    isOpen
-                      ? "bg-emerald-100 text-emerald-700"
-                      : "bg-amber-100 text-amber-700"
-                  }`}
-                >
-                  {isOpen ? "Open now" : "Orders closed (will open soon)"}
+            <span className="hero-doodle" aria-hidden="true">
+              ✳
+            </span>
+          </div>
+        </section>
+        <div className="service-strip">
+          <div className="shell service-inner">
+            <span>
+              <Icon name="bag" size={18} />
+              <strong>Your food, your way.</strong>
+            </span>
+            <span>Free pickup at Pearl Hall</span>
+            <span className="strip-dot">·</span>
+            <span>Delivery for just $3</span>
+            <a href="#how-it-works">
+              How it works <Icon name="arrow" size={16} />
+            </a>
+          </div>
+        </div>
+        <section
+          className="menu-section shell"
+          id="menu"
+          aria-labelledby="menu-title"
+        >
+          <div className="menu-intro">
+            <div>
+              <p className="eyebrow">THE GOOD STUFF</p>
+              <h2 id="menu-title">What sounds good?</h2>
+              <p>A little comfort food. A lot to love.</p>
+            </div>
+            <label className="search-box">
+              <Icon name="search" size={18} />
+              <input
+                type="search"
+                placeholder="Find your craving…"
+                aria-label="Search the menu"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+              />
+              {search && (
+                <button onClick={() => setSearch("")} aria-label="Clear search">
+                  <Icon name="close" size={16} />
+                </button>
+              )}
+            </label>
+          </div>
+          <div className="category-bar" aria-label="Menu categories">
+            {categories.map((name) => (
+              <button
+                key={name}
+                aria-pressed={category === name}
+                onClick={() => setCategory(name)}
+              >
+                {name === "Everything" && <Icon name="utensils" size={16} />}
+                {name}
+                <span>
+                  {name === "Everything"
+                    ? menuItems.length
+                    : menuItems.filter((item) => itemCategory(item) === name)
+                        .length}
+                </span>
+              </button>
+            ))}
+          </div>
+          {!isOpen && !loading && (
+            <div className="notice" role="status">
+              <Icon name="clock" />
+              <div>
+                <strong>
+                  {isOpen === false
+                    ? "The kitchen’s taking a break."
+                    : "We’re checking with the kitchen."}
+                </strong>
+                <p>
+                  {isOpen === false
+                    ? "Feel free to browse. Ordering will be back when we reopen."
+                    : "Ordering is paused until we can confirm availability. Please check back shortly."}
+                </p>
+              </div>
+            </div>
+          )}
+          <div className="menu-layout">
+            <div className="menu-content">
+              <div className="menu-results-label">
+                <h3>
+                  {search
+                    ? `Results for “${search}”`
+                    : category === "Everything"
+                      ? "A little of everything"
+                      : category}
+                </h3>
+                <span>
+                  {loading
+                    ? "Loading menu…"
+                    : `${filteredItems.length} ${filteredItems.length === 1 ? "option" : "options"}`}
                 </span>
               </div>
-              <div className="mt-6 space-y-4">
-                {isLoading ? (
-                  <div className="rounded-2xl border border-zinc-100 bg-white p-4 shadow-sm">
-                    <div className="h-4 w-28 animate-pulse rounded-full bg-zinc-200" />
-                    <div className="mt-3 h-3 w-48 animate-pulse rounded-full bg-zinc-200" />
-                    <div className="mt-5 h-9 w-full animate-pulse rounded-xl bg-zinc-200" />
-                  </div>
-                ) : (
-                  featuredItems.map((item) => (
-                    <div
-                      key={item.name}
-                      className="rounded-2xl border border-zinc-100 bg-white p-3 shadow-sm"
-                    >
-                      <div className="flex gap-4">
-                        <MenuItemPhoto
-                          item={item}
-                          className="h-24 w-24 shrink-0 rounded-2xl sm:h-28 sm:w-28"
-                          initialsClassName="text-lg"
-                        />
-                        <div className="flex min-w-0 flex-1 flex-col">
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="min-w-0">
-                              <p className="truncate text-base font-semibold text-zinc-900">
-                                {item.name}
-                              </p>
-                              <p className="mt-1 text-sm leading-5 text-zinc-500">
-                                {item.description}
-                              </p>
-                            </div>
-                            <p className="shrink-0 text-sm font-semibold text-zinc-900">
-                              {item.price}
-                            </p>
-                          </div>
-                          <button
-                            onClick={() => addToCart(item)}
-                            disabled={!isOpen}
-                            className="mt-auto w-full rounded-xl border border-zinc-200 px-3 py-2 text-sm font-semibold text-zinc-700 transition hover:border-zinc-300 hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-60"
-                          >
-                            {isOpen ? "Add to cart" : "Ordering disabled"}
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-              <div className="mt-6 rounded-2xl border border-zinc-100 bg-white p-5 shadow-sm">
-                <div className="flex items-center justify-between">
-                  <p className="text-sm font-semibold text-zinc-500">
-                    Your cart
-                  </p>
-                  <p className="text-xs text-zinc-400">
-                    {cartItems.length === 0
-                      ? "Empty"
-                      : `${cartItems.length} items`}
-                  </p>
-                </div>
-                <div className="mt-4 space-y-3">
-                  {cartItems.length === 0 ? (
-                    <p className="text-sm text-zinc-500">
-                      Add items to begin your order.
-                    </p>
-                  ) : (
-                    cartItems.map((item) => (
-                      <div
-                        key={item.name}
-                        className="flex items-center justify-between gap-4 rounded-xl bg-[#f7f8fb] px-3 py-2"
-                      >
-                        <div className="flex min-w-0 items-center gap-3">
-                          <MenuItemPhoto
-                            item={item}
-                            className="h-11 w-11 shrink-0 rounded-xl"
-                            initialsClassName="text-xs"
-                          />
-                          <div className="min-w-0">
-                            <p className="truncate text-sm font-semibold text-zinc-900">
-                              {item.name}
-                            </p>
-                            <p className="text-xs text-zinc-500">
-                              {item.price}
-                            </p>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => updateQuantity(item.name, -1)}
-                            className="h-8 w-8 rounded-full border border-zinc-200 text-sm font-semibold text-zinc-600 transition hover:border-zinc-300 hover:bg-white"
-                          >
-                            −
-                          </button>
-                          <span className="w-6 text-center text-sm font-semibold text-zinc-700">
-                            {item.quantity}
-                          </span>
-                          <button
-                            onClick={() => updateQuantity(item.name, 1)}
-                            className="h-8 w-8 rounded-full border border-zinc-200 text-sm font-semibold text-zinc-600 transition hover:border-zinc-300 hover:bg-white"
-                          >
-                            +
-                          </button>
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
-                <div className="mt-4 flex items-center justify-between border-t border-zinc-100 pt-4">
-                  <div>
-                    <p className="text-xs text-zinc-500">Order total</p>
-                    <p className="text-lg font-semibold text-zinc-900">
-                      ${cartTotal.toFixed(2)}
-                    </p>
-                  </div>
+              {menuError ? (
+                <div className="menu-empty" role="alert">
+                  <Icon name="utensils" size={32} />
+                  <h3>The menu couldn’t load.</h3>
+                  <p>Let’s give that another try.</p>
                   <button
-                    onClick={handleCheckout}
-                    disabled={cartItems.length === 0 || !isOpen}
-                    className="rounded-full bg-zinc-900 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-zinc-900/20 transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-60"
+                    className="primary-button"
+                    onClick={() => {
+                      setLoading(true);
+                      void loadMenu();
+                    }}
                   >
-                    Checkout
+                    Try again <Icon name="arrow" size={16} />
                   </button>
                 </div>
-                {!isOpen && (
-                  <p className="mt-3 text-xs text-amber-600">
-                    Orders are closed right now. Please check back soon.
+              ) : loading ? (
+                <div
+                  className="food-grid"
+                  aria-label="Loading menu"
+                  aria-busy="true"
+                >
+                  {[0, 1, 2, 3, 4, 5].map((i) => (
+                    <div className="menu-skeleton" key={i}>
+                      <div />
+                      <span />
+                      <span />
+                    </div>
+                  ))}
+                </div>
+              ) : filteredItems.length === 0 ? (
+                <div className="menu-empty">
+                  <Icon name="search" size={32} />
+                  <h3>
+                    {menuItems.length === 0
+                      ? "Something good is on its way."
+                      : "No bites found."}
+                  </h3>
+                  <p>
+                    {menuItems.length === 0
+                      ? "Check back soon for the next menu."
+                      : "Try another search or explore the full menu."}
                   </p>
-                )}
-                {isCheckoutOpen && (
-                  <div className="mt-6 rounded-2xl border border-zinc-200 bg-white p-4">
-                    <div className="flex items-center justify-between">
-                      <p className="text-sm font-semibold text-zinc-900">
-                        Checkout
-                      </p>
-                      <button
-                        onClick={() => setIsCheckoutOpen(false)}
-                        className="text-xs font-semibold text-zinc-500 transition hover:text-zinc-700"
+                  {menuItems.length > 0 && (
+                    <button
+                      className="text-button"
+                      onClick={() => {
+                        setSearch("");
+                        setCategory("Everything");
+                      }}
+                    >
+                      See everything <Icon name="arrow" size={16} />
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <div className="food-grid">
+                  {filteredItems.map((item, index) => {
+                    const quantity =
+                      cartItems.find((entry) => entry.name === item.name)
+                        ?.quantity ?? 0;
+                    return (
+                      <article
+                        className={`food-card ${quantity ? "in-bag" : ""}`}
+                        key={item.name}
+                        style={{
+                          animationDelay: `${Math.min(index, 5) * 45}ms`,
+                        }}
                       >
-                        Close
-                      </button>
-                    </div>
-                    <p className="mt-2 text-xs text-zinc-500">
-                      Choose your payment method and continue to checkout.
-                    </p>
-                    <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                      <button
-                        onClick={() => setPaymentMethod("cash")}
-                        className={`rounded-xl border px-3 py-3 text-left text-sm font-semibold transition ${
-                          paymentMethod === "cash"
-                            ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                            : "border-zinc-200 bg-white text-zinc-700 hover:border-zinc-300"
-                        }`}
-                      >
-                        Pay with cash
-                        <span className="mt-1 block text-xs font-normal text-zinc-500">
-                          Pay when you pick up your order.
-                        </span>
-                      </button>
-                      <button
-                        onClick={() => setPaymentMethod("card")}
-                        className={`rounded-xl border px-3 py-3 text-left text-sm font-semibold transition ${
-                          paymentMethod === "card"
-                            ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                            : "border-zinc-200 bg-white text-zinc-700 hover:border-zinc-300"
-                        }`}
-                      >
-                        Pay online
-                        <span className="mt-1 block text-xs font-normal text-zinc-500">
-                          Card and wallet payments with Stripe.
-                        </span>
-                      </button>
-                    </div>
-                    <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                      <a
-                        href="#menu"
-                        onClick={() => setIsCheckoutOpen(false)}
-                        className="text-sm font-semibold text-zinc-600 transition hover:text-zinc-900"
-                      >
-                        Add more items
-                      </a>
-                      <button
-                        onClick={handlePlaceOrder}
-                        disabled={!isOpen}
-                        className="rounded-full bg-zinc-900 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-zinc-900/20"
-                      >
-                        Continue to checkout
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
+                        <div className="card-image-wrap">
+                          <FoodPhoto item={item} />
+                          {quantity > 0 && (
+                            <span className="in-bag-badge">
+                              <Icon name="check" size={12} /> In your bag
+                            </span>
+                          )}
+                          <span className="category-label">
+                            {itemCategory(item)}
+                          </span>
+                        </div>
+                        <div className="food-card-body">
+                          <h3>{item.name}</h3>
+                          <p>{item.description}</p>
+                          <div className="food-card-bottom">
+                            <strong>{money(parsePrice(item.price))}</strong>
+                            {quantity > 0 ? (
+                              <QuantityControl
+                                name={item.name}
+                                quantity={quantity}
+                                onChange={(delta) =>
+                                  changeQuantity(item, delta)
+                                }
+                                disabled={!canOrder}
+                              />
+                            ) : (
+                              <button
+                                className="add-button"
+                                onClick={() => changeQuantity(item, 1)}
+                                disabled={!canOrder}
+                                aria-label={`Add ${item.name} to your bag`}
+                              >
+                                Add <Icon name="plus" size={17} />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
+              )}
+              <p className="menu-footnote">
+                Good food is better shared. Check each item for portion sizes.
+                <br />
+                Menu images are illustrative; your food may look a little
+                different.
+              </p>
             </div>
-          </section>
-        </div>
-      </div>
-
-      <section id="menu" className="bg-white">
-        <div className="mx-auto flex w-full max-w-6xl flex-col gap-10 px-6 py-20 sm:px-10">
-          <div className="flex flex-col gap-3">
-            <p className="text-sm font-semibold uppercase tracking-[0.2em] text-zinc-400">
-              Menu
-            </p>
-            <h2 className="text-3xl font-semibold text-zinc-900">
-              A focused selection, always fresh.
+            <aside className="desktop-order" aria-label="Your order">
+              {orderContents}
+            </aside>
+          </div>
+        </section>
+        <section
+          className="how-section shell"
+          id="how-it-works"
+          aria-labelledby="how-title"
+        >
+          <div className="how-heading">
+            <span className="eyebrow">LESS SCROLLING. MORE SNACKING.</span>
+            <h2 id="how-title">
+              From craving to
+              <br />
+              “that hit the spot.”
             </h2>
-            <p className="max-w-2xl text-base leading-7 text-zinc-600">
-              Browse the essentials with fresh photos, clear prices, and quick
-              add-to-cart actions.
+          </div>
+          <div className="how-step">
+            <span>01</span>
+            <Icon name="utensils" size={25} />
+            <h3>Find your favorites</h3>
+            <p>
+              A tray for the group or a little treat for you. Fill your bag.
             </p>
           </div>
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-            {isLoading
-              ? [0, 1, 2].map((key) => (
-                  <div
-                    key={key}
-                    className="h-80 animate-pulse rounded-3xl bg-[#f7f8fb]"
-                  />
-                ))
-              : menuItems.map((item) => (
-                  <article
-                    key={item.name}
-                    className="rounded-3xl border border-zinc-100 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg"
-                  >
-                    <div className="relative">
-                      <MenuItemPhoto
-                        item={item}
-                        className="aspect-[4/3] w-full rounded-2xl"
-                        initialsClassName="text-3xl"
-                      />
-                      <span className="absolute right-3 top-3 rounded-full bg-white/95 px-3 py-1 text-sm font-semibold text-zinc-900 shadow-sm">
-                        {item.price}
-                      </span>
-                    </div>
-                    <div className="mt-5 flex min-h-[10.5rem] flex-col">
-                      <h3 className="text-lg font-semibold text-zinc-900">
-                        {item.name}
-                      </h3>
-                      <p className="mt-2 flex-1 text-sm leading-6 text-zinc-600">
-                        {item.description}
-                      </p>
-                      <button
-                        onClick={() => addToCart(item)}
-                        disabled={!isOpen}
-                        className="mt-5 w-full rounded-full bg-zinc-900 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-zinc-900/15 transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-60"
-                      >
-                        {isOpen ? "Add to cart" : "Ordering disabled"}
-                      </button>
-                    </div>
-                  </article>
-                ))}
+          <div className="how-step">
+            <span>02</span>
+            <Icon name="bag" size={25} />
+            <h3>Make it your way</h3>
+            <p>
+              Pick up at Pearl Hall or get it delivered. Pay online or with
+              cash.
+            </p>
           </div>
-        </div>
-      </section>
-
-      <footer className="bg-[#0b1120] text-white/70">
-        <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-6 py-10 text-sm sm:px-10 md:flex-row md:items-center md:justify-between">
-          <p>© 2026 Dormside Ordering. All rights reserved.</p>
-          <div className="flex gap-6">
-            <span>Security</span>
-            <span>Privacy</span>
-            <span>Support</span>
+          <div className="how-step">
+            <span>03</span>
+            <Icon name="heart" size={25} />
+            <h3>Enjoy the good stuff</h3>
+            <p>Put the books down. Get your friends together. Dig in.</p>
           </div>
+        </section>
+      </main>
+      <footer className="site-footer">
+        <div className="shell footer-inner">
+          <div>
+            <Brand />
+            <p>Good food. A little closer.</p>
+          </div>
+          <p>Made for your kind of hungry.</p>
+          <span>© {new Date().getFullYear()} Dormside</span>
         </div>
       </footer>
+      {count > 0 && (
+        <div className="mobile-bag-bar">
+          <button onClick={() => setCartOpen(true)}>
+            <span className="mobile-bag-count">{count}</span>
+            <span>View your bag</span>
+            <strong>{money(total)}</strong>
+            <Icon name="arrow" size={19} />
+          </button>
+        </div>
+      )}
+      {cartOpen && (
+        <dialog
+          ref={dialog}
+          className="cart-dialog"
+          aria-label="Your bag"
+          onCancel={() => setCartOpen(false)}
+          onClose={() => setCartOpen(false)}
+          onClick={(event) => {
+            if (event.target === event.currentTarget) setCartOpen(false);
+          }}
+        >
+          <div className="cart-sheet">
+            <div className="sheet-handle" />
+            <button
+              className="sheet-close"
+              onClick={() => setCartOpen(false)}
+              aria-label="Close your bag"
+              autoFocus
+            >
+              <Icon name="close" />
+            </button>
+            {orderContents}
+          </div>
+        </dialog>
+      )}
+      <span
+        className="sr-only"
+        role="status"
+        aria-live="polite"
+        aria-atomic="true"
+      >
+        {announcement}
+      </span>
     </div>
   );
 }
